@@ -34,6 +34,24 @@ final class VibeBuddyChatController: ObservableObject {
 
     func submit(_ text: String) {
         guard !isStreaming else { return }
+
+        // "/vibe <task>" (typed) or "Vibe, <task>" (spoken) launches a real
+        // Vibe Code CLI agent instead of a chat round-trip. The session
+        // watcher surfaces it in the VIBE CODE SESSIONS strip within seconds.
+        if let vibeTask = VibeAgentLauncher.task(fromInput: text) {
+            messages.append(ChatMessage(id: UUID(), role: .user, text: text))
+            let confirmation: String
+            if let directory = VibeAgentLauncher.launch(task: vibeTask) {
+                let project = URL(fileURLWithPath: directory).lastPathComponent
+                confirmation = "🚀 Vibe Code agent launched on \(project): “\(vibeTask)”. Watch it work in VIBE CODE SESSIONS below — cost updates live."
+            } else {
+                BuddySoundEffects.playHiss()
+                confirmation = "I couldn't find the Vibe Code CLI on this Mac — install it with `curl -LsSf https://mistral.ai/vibe/install.sh | bash` and try again."
+            }
+            messages.append(ChatMessage(id: UUID(), role: .assistant, text: confirmation))
+            return
+        }
+
         let userMessageId = UUID()
         messages.append(ChatMessage(id: userMessageId, role: .user, text: text))
         isStreaming = true
@@ -45,12 +63,14 @@ final class VibeBuddyChatController: ObservableObject {
         Task {
             // Captured ONCE per submit, before the request, so the worker
             // sees the screen as it was when the user asked.
-            let screenshotBase64 = await captureFrontmostScreenshotBase64()
-            if screenshotBase64 != nil,
+            let screenshotData = await captureFrontmostScreenshotJPEG()
+            let screenshotBase64 = screenshotData?.base64EncodedString()
+            if let screenshotData,
                let userIndex = messages.firstIndex(where: { $0.id == userMessageId }) {
-                // Badge the user message so the transcript shows the screen
-                // context actually went along with the question.
+                // Badge the user message and render a real thumbnail so the
+                // screen context is visibly attached, not just claimed.
                 messages[userIndex].hasScreenshot = true
+                messages[userIndex].screenshotThumbnail = Self.thumbnailData(fromJPEG: screenshotData)
             }
 
             var assistantMessageId: UUID?
@@ -92,6 +112,7 @@ final class VibeBuddyChatController: ObservableObject {
                 lastReplyWasReplayed = result.isReplayed
             } catch {
                 appendToAssistantMessage(actuationParser.flush())
+                BuddySoundEffects.playHiss()
                 let explanation = "I couldn't reach the worker (\(error.localizedDescription)). Check that wrangler dev is running on 127.0.0.1:8787, or set chat mode to replay."
                 messages.append(ChatMessage(id: UUID(), role: .assistant, text: explanation))
             }
@@ -129,12 +150,28 @@ final class VibeBuddyChatController: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
+    /// Downscales a captured screen JPEG to a ~300px-wide thumbnail for
+    /// inline display in the transcript.
+    private static func thumbnailData(fromJPEG jpegData: Data) -> Data? {
+        guard let image = NSImage(data: jpegData) else { return nil }
+        let targetWidth: CGFloat = 300
+        let scale = targetWidth / max(image.size.width, 1)
+        let targetSize = NSSize(width: targetWidth, height: image.size.height * scale)
+        let thumbnail = NSImage(size: targetSize)
+        thumbnail.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: targetSize))
+        thumbnail.unlockFocus()
+        guard let tiff = thumbnail.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.6])
+    }
+
     /// Captures the frontmost display (the one with the cursor) as a JPEG
     /// no wider than 1280 px, re-encoded at 0.6 quality, and returns it as
     /// raw base64 — NO `data:` URI prefix (see app/CHAT_CONTRACT.md).
     /// Returns nil when the user opted out, capture fails, or the Screen
     /// Recording permission is missing — the chat then proceeds text-only.
-    private func captureFrontmostScreenshotBase64() async -> String? {
+    private func captureFrontmostScreenshotJPEG() async -> Data? {
         guard isScreenshotContextEnabled else { return nil }
         do {
             // CompanionScreenCaptureUtility already excludes our own windows
@@ -147,9 +184,9 @@ final class VibeBuddyChatController: ObservableObject {
             // request body small; fall back to the original data if decoding fails.
             guard let bitmap = NSBitmapImageRep(data: capture.imageData),
                   let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.6]) else {
-                return capture.imageData.base64EncodedString()
+                return capture.imageData
             }
-            return jpegData.base64EncodedString()
+            return jpegData
         } catch {
             print("📸 Vibe Buddy: screenshot context unavailable (\(error.localizedDescription)) — sending text only")
             return nil
@@ -207,7 +244,7 @@ struct VibeBuddyPanelContainer: View {
                 .foregroundStyle(DS.Colors.textTertiary)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 6)
-                .background(DS.Colors.surface2, in: Capsule())
+                .background(DS.Colors.surface2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .help("Quit Vibe Buddy")
@@ -227,7 +264,7 @@ struct VibeBuddyPanelContainer: View {
             .foregroundStyle(DS.Colors.textSecondary)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(DS.Colors.surface2, in: Capsule())
+            .background(DS.Colors.surface2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(isShowingRoutines ? "Back to chat" : "Routines")

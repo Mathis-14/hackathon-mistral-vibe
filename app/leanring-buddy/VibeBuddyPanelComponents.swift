@@ -8,6 +8,7 @@
 //  and these read as styling.
 //
 
+import AppKit
 import SwiftUI
 
 // MARK: - Status Dot
@@ -71,6 +72,19 @@ struct VibeBuddyChatBubble: View {
                         lineWidth: 1
                     ))
 
+                if isUser, let thumbnailData = message.screenshotThumbnail,
+                   let thumbnail = NSImage(data: thumbnailData) {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 150)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(DS.Colors.borderSubtle, lineWidth: 1)
+                        )
+                }
+
                 if isUser && message.hasScreenshot {
                     screenshotCaption
                 }
@@ -128,13 +142,87 @@ struct VibeBuddyChatBubble: View {
         }
     }
 
-    /// Renders the message text, optionally with the inline streaming caret.
-    /// The caret is concatenated into the Text so it wraps naturally with
-    /// the last line instead of floating beside the bubble.
+    /// Message content split into prose and fenced code segments so code
+    /// renders as real code blocks (```lang fences, monospaced, boxed).
+    /// Prose gets inline-markdown treatment (bold, `code`, links).
+    private enum MessageSegment: Equatable {
+        case prose(String)
+        case code(String)
+    }
+
+    private static func segments(from text: String) -> [MessageSegment] {
+        var segments: [MessageSegment] = []
+        var prose: [String] = []
+        var code: [String] = []
+        var inCode = false
+        for line in text.components(separatedBy: "\n") {
+            if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                if inCode {
+                    segments.append(.code(code.joined(separator: "\n")))
+                    code = []
+                } else if !prose.joined().trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    segments.append(.prose(prose.joined(separator: "\n").trimmingCharacters(in: .newlines)))
+                    prose = []
+                } else {
+                    prose = []
+                }
+                inCode.toggle()
+                continue
+            }
+            if inCode {
+                code.append(line)
+            } else {
+                prose.append(line)
+            }
+        }
+        if inCode, !code.joined().isEmpty {
+            segments.append(.code(code.joined(separator: "\n")))  // unclosed fence mid-stream
+        } else if !prose.joined().trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            segments.append(.prose(prose.joined(separator: "\n").trimmingCharacters(in: .newlines)))
+        }
+        return segments
+    }
+
+    private func inlineMarkdown(_ prose: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: prose,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(prose)
+    }
+
     private func styledText(caretOpacity: Double?) -> some View {
-        var text = Text(verbatim: message.text)
+        let segments = Self.segments(from: message.text)
+        return VStack(alignment: .leading, spacing: 7) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                switch segment {
+                case .prose(let prose):
+                    proseText(prose, caretOpacity: index == segments.count - 1 ? caretOpacity : nil)
+                case .code(let code):
+                    Text(verbatim: code)
+                        .font(.system(size: 11.5, design: .monospaced))
+                        .lineSpacing(2)
+                        .foregroundColor(DS.Colors.textPrimary)
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(DS.Colors.borderSubtle, lineWidth: 1)
+                        )
+                }
+            }
+            if segments.isEmpty, let caretOpacity {
+                proseText("", caretOpacity: caretOpacity)
+            }
+        }
+        .multilineTextAlignment(.leading)
+    }
+
+    private func proseText(_ prose: String, caretOpacity: Double?) -> some View {
+        var text = Text(inlineMarkdown(prose))
         if let caretOpacity {
-            text = text + Text(verbatim: message.text.isEmpty ? "▍" : " ▍")
+            text = text + Text(verbatim: prose.isEmpty ? "▍" : " ▍")
                 .foregroundColor(DS.Colors.accentText.opacity(caretOpacity))
         }
         return text
@@ -142,15 +230,14 @@ struct VibeBuddyChatBubble: View {
             .lineSpacing(3)
             .foregroundColor(DS.Colors.textPrimary)
             .textSelection(.enabled)
-            .multilineTextAlignment(.leading)
     }
 
     private var bubbleShape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
-            topLeadingRadius: 16,
-            bottomLeadingRadius: isUser ? 16 : 5,
-            bottomTrailingRadius: isUser ? 5 : 16,
-            topTrailingRadius: 16,
+            topLeadingRadius: 8,
+            bottomLeadingRadius: isUser ? 8 : 3,
+            bottomTrailingRadius: isUser ? 3 : 8,
+            topTrailingRadius: 8,
             style: .continuous
         )
     }
@@ -234,7 +321,7 @@ struct VibeBuddyInputBar: View {
             TextField(
                 "",
                 text: $draft,
-                prompt: Text("Ask anything about your screen…")
+                prompt: Text("Type / for quick access")
                     .foregroundColor(DS.Colors.textTertiary)
             )
             .textFieldStyle(.plain)
@@ -262,9 +349,9 @@ struct VibeBuddyInputBar: View {
         .padding(.leading, 12)
         .padding(.trailing, 5)
         .padding(.vertical, 5)
-        .background(Capsule().fill(DS.Colors.surface2))
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(DS.Colors.surface2))
         .overlay(
-            Capsule().stroke(
+            RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(
                 isFocused ? DS.Colors.accent.opacity(0.45) : DS.Colors.borderSubtle,
                 lineWidth: 1
             )

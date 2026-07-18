@@ -30,6 +30,9 @@ struct ChatMessage: Identifiable, Equatable {
     /// True when a screenshot of the user's screen was attached to this
     /// (user) message. Defaulted so all existing call sites keep compiling.
     var hasScreenshot: Bool = false
+    /// Small JPEG of the attached screenshot, rendered as a thumbnail on
+    /// the bubble so the screen context is visibly real.
+    var screenshotThumbnail: Data? = nil
 }
 
 // MARK: - Vibe Buddy Panel
@@ -93,11 +96,12 @@ struct VibeBuddyPanelView: View {
 
             footer
         }
-        .frame(width: Self.preferredSize.width, height: Self.preferredSize.height)
+        .frame(width: Self.preferredSize.width)
+        .frame(maxHeight: .infinity)
         .background(DS.Colors.background)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(DS.Colors.borderSubtle, lineWidth: 1)
         )
     }
@@ -124,9 +128,9 @@ struct VibeBuddyPanelView: View {
                 headerAccessory
             }
 
-            Image(systemName: "sparkle")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(DS.Colors.accentText.opacity(0.85))
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 18, height: 18)
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)

@@ -43,7 +43,14 @@ final class MenuBarPanelManager: NSObject {
     let routineStore: RoutineStore
     let routineScheduler: RoutineScheduler
     private let panelWidth: CGFloat = VibeBuddyPanelView.preferredSize.width
-    private let panelHeight: CGFloat = VibeBuddyPanelView.preferredSize.height
+    private let panelEdgeMargin: CGFloat = 12
+
+    /// Side-panel height: the full visible screen height minus margins, so
+    /// the panel hugs the right edge instead of covering the working area.
+    private var panelHeight: CGFloat {
+        let screen = NSScreen.main?.visibleFrame.height ?? VibeBuddyPanelView.preferredSize.height
+        return screen - panelEdgeMargin * 2
+    }
 
     init(companionManager: CompanionManager) {
         self.companionManager = companionManager
@@ -78,8 +85,18 @@ final class MenuBarPanelManager: NSObject {
 
         guard let button = statusItem?.button else { return }
 
-        button.image = NSImage(systemSymbolName: "message.badge.waveform", accessibilityDescription: "Vibe Buddy")
-        button.image?.isTemplate = true
+        // The Mistral M as a template image (white-on-transparent source):
+        // macOS renders it black or white to match the menu bar, exactly
+        // like the other assistants' icons.
+        if let logoURL = Bundle.main.url(forResource: "menubar-mistral", withExtension: "png"),
+           let logo = NSImage(contentsOf: logoURL) {
+            logo.size = NSSize(width: 18, height: 18)
+            logo.isTemplate = true
+            button.image = logo
+        } else {
+            button.image = NSImage(systemSymbolName: "message.badge.waveform", accessibilityDescription: "Vibe Buddy")
+            button.image?.isTemplate = true
+        }
         button.action = #selector(statusItemClicked)
         button.target = self
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -186,25 +203,18 @@ final class MenuBarPanelManager: NSObject {
     }
 
     private func positionPanelBelowStatusItem() {
-        guard let panel else { return }
-        guard let buttonWindow = statusItem?.button?.window else { return }
+        guard let panel, let screen = NSScreen.main else { return }
+        let visible = screen.visibleFrame
 
-        let statusItemFrame = buttonWindow.frame
-        let gapBelowMenuBar: CGFloat = 4
-
-        // Calculate the panel's content height from the hosting view's fitting size
-        // so the panel snugly wraps the SwiftUI content instead of using a fixed height.
-        let fittingSize = panel.contentView?.fittingSize ?? CGSize(width: panelWidth, height: panelHeight)
-        let actualPanelHeight = fittingSize.height
-
-        // Horizontally center the panel beneath the status item icon
-        let panelOriginX = statusItemFrame.midX - (panelWidth / 2)
-        let panelOriginY = statusItemFrame.minY - actualPanelHeight - gapBelowMenuBar
-
-        panel.setFrame(
-            NSRect(x: panelOriginX, y: panelOriginY, width: panelWidth, height: actualPanelHeight),
-            display: true
+        // Side panel: pinned to the right edge, full visible height — it
+        // sits beside the user's work instead of on top of it.
+        let frame = NSRect(
+            x: visible.maxX - panelWidth - panelEdgeMargin,
+            y: visible.minY + panelEdgeMargin,
+            width: panelWidth,
+            height: panelHeight
         )
+        panel.setFrame(frame, display: true)
     }
 
     // MARK: - Click Outside Dismissal
