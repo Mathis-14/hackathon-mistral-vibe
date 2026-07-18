@@ -31,6 +31,7 @@ struct leanring_buddyApp: App {
 final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarPanelManager: MenuBarPanelManager?
     private var globalSummonHotkeyMonitor: GlobalSummonHotkeyMonitor?
+    private let wakeWordSidecarMonitor = WakeWordSidecarMonitor()
     private let companionManager = CompanionManager()
     private var sparkleUpdaterController: SPUStandardUpdaterController?
 
@@ -64,6 +65,13 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
         summonHotkeyMonitor.start()
         globalSummonHotkeyMonitor = summonHotkeyMonitor
 
+        // « Hey Vibe » wake word (v2 stretch): optional Python sidecar; the
+        // app works fully without it. Summons the panel like the hotkey.
+        wakeWordSidecarMonitor.onWake = { [weak self] in
+            self?.menuBarPanelManager?.showPanel()
+        }
+        wakeWordSidecarMonitor.startIfAvailable()
+
         companionManager.start()
         // Auto-open the panel if the user still needs to do something:
         // either they haven't onboarded yet, or permissions were revoked.
@@ -75,6 +83,7 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        wakeWordSidecarMonitor.stop()
         companionManager.stop()
     }
 
