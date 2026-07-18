@@ -1,0 +1,24 @@
+// Official Mistral pixel emblem — extracted verbatim from mistral.ai (2026).
+export default function Emblem({ size = 21 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={(size * 15) / 21}
+      viewBox="0 0 21 15"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="Mistral emblem"
+    >
+      <path d="M6 0H3V3H6V0Z" fill="#FFAF01" />
+      <path d="M6 9H3V12H6V9Z" fill="#E61300" />
+      <path d="M9 12H0V15H9V12Z" fill="#C4001D" />
+      <path d="M9 3H3V6H9V3Z" fill="#FF8204" />
+      <path d="M12 9H9V12H12V9Z" fill="#E61300" />
+      <path d="M18 6H3V9H18V6Z" fill="#FA500F" />
+      <path d="M18 3H12V6H18V3Z" fill="#FF8204" />
+      <path d="M18 0H15V3H18V0Z" fill="#FFAF01" />
+      <path d="M18 9H15V12H18V9Z" fill="#E61300" />
+      <path d="M21 12H12V15H21V12Z" fill="#C4001D" />
+    </svg>
+  );
+}
