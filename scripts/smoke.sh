@@ -12,6 +12,35 @@ MODE="${DEMO_MODE:-replay}"
 fail() { echo "❌ SMOKE FAIL: $*" >&2; exit 1; }
 pass() { echo "✅ $*"; }
 
+# Reassemble the reply from the APP-wire SSE (data:{"type":"delta"} …
+# data:{"type":"done"}) on stdin. Fails if the done terminator is missing.
+app_sse_text() {
+  python3 -c '
+import json, sys
+text, done = "", False
+for line in sys.stdin:
+    line = line.strip()
+    if not line.startswith("data: "):
+        continue
+    payload = line[6:]
+    if payload == "[DONE]":
+        done = True
+        continue
+    try:
+        obj = json.loads(payload)
+    except json.JSONDecodeError:
+        continue
+    if obj.get("type") == "delta":
+        text += obj.get("text", "")
+    elif obj.get("type") == "done":
+        done = True
+if not done:
+    print("missing {\"type\":\"done\"} terminator", file=sys.stderr)
+    sys.exit(1)
+print(text)
+'
+}
+
 # Reassemble the full reply text from an SSE body on stdin.
 sse_text() {
   python3 -c '
@@ -90,6 +119,42 @@ curl -fsS -H "x-demo-mode: $MODE" -H 'content-type: application/json' -d "$BODY"
   | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["content"][0]["text"], "empty text"' \
   || fail "non-streaming /chat"
 pass "/chat non-streaming"
+
+echo "-- /chat APP wire basic (screenshot_base64:null — the shipped Swift client's shape)"
+BODY='{"messages":[{"role":"user","content":"Give me a quick standup summary for today."}],"screenshot_base64":null}'
+RAW=$(curl -fsS -N -H "x-demo-mode: $MODE" -H 'content-type: application/json' -d "$BODY" "$BASE/chat")
+echo "$RAW" | grep -q '"type":"delta"' || fail "app basic: no delta events"
+TEXT=$(echo "$RAW" | app_sse_text) || fail "app basic: bad stream (no done terminator?)"
+[ -n "$TEXT" ] || fail "app basic: empty reassembled text"
+pass "/chat app basic — ${#TEXT} chars, done terminator present"
+
+echo "-- /chat APP wire screenshot (screenshot_base64 attached)"
+python3 -c '
+import base64, json, sys
+img = base64.b64encode(open(sys.argv[1], "rb").read()).decode()
+body = {
+    "messages": [{"role": "user", "content": "What am I looking at? Anything to fix before I send it?"}],
+    "screenshot_base64": img,
+}
+json.dump(body, open(sys.argv[2], "w"))
+' "$ROOT/fixtures/screenshot.jpg" /tmp/vb-smoke-app-image.json
+RAW=$(curl -fsS -N -H "x-demo-mode: $MODE" -H 'content-type: application/json' --data @/tmp/vb-smoke-app-image.json "$BASE/chat")
+TEXT=$(echo "$RAW" | app_sse_text) || fail "app screenshot: bad stream"
+[ -n "$TEXT" ] || fail "app screenshot: empty reassembled text"
+pass "/chat app screenshot — ${#TEXT} chars"
+
+echo "-- /chat APP wire actuation (expects trailing [OPEN_APP:] token)"
+BODY='{"messages":[{"role":"user","content":"Open Notes and get me started on the demo script."}],"screenshot_base64":null}'
+RAW=$(curl -fsS -N -H "x-demo-mode: $MODE" -H 'content-type: application/json' -d "$BODY" "$BASE/chat")
+TEXT=$(echo "$RAW" | app_sse_text) || fail "app actuation: bad stream"
+echo "$TEXT" | python3 -c '
+import re, sys
+text = sys.stdin.read().strip()
+if not re.search(r"\[(OPEN_APP|OPEN_URL):[^\]]+\]$", text):
+    print(f"no trailing action token. Tail: ...{text[-120:]!r}", file=sys.stderr)
+    sys.exit(1)
+' || fail "app actuation: reply does not END with an action token"
+pass "/chat app actuation — token present at end"
 
 echo "-- /transcribe"
 curl -fsS -H "x-demo-mode: $MODE" -F "file=@$ROOT/fixtures/voice-sample.wav;type=audio/wav" -F "model=ignored-by-worker" "$BASE/transcribe" \
