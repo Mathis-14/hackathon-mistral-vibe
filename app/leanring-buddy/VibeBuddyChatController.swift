@@ -34,6 +34,23 @@ final class VibeBuddyChatController: ObservableObject {
 
     func submit(_ text: String) {
         guard !isStreaming else { return }
+
+        // "/vibe <task>" (typed) or "Vibe, <task>" (spoken) launches a real
+        // Vibe Code CLI agent instead of a chat round-trip. The session
+        // watcher surfaces it in the VIBE CODE SESSIONS strip within seconds.
+        if let vibeTask = VibeAgentLauncher.task(fromInput: text) {
+            messages.append(ChatMessage(id: UUID(), role: .user, text: text))
+            let confirmation: String
+            if let directory = VibeAgentLauncher.launch(task: vibeTask) {
+                let project = URL(fileURLWithPath: directory).lastPathComponent
+                confirmation = "🚀 Vibe Code agent launched on \(project): “\(vibeTask)”. Watch it work in VIBE CODE SESSIONS below — cost updates live."
+            } else {
+                confirmation = "I couldn't find the Vibe Code CLI on this Mac — install it with `curl -LsSf https://mistral.ai/vibe/install.sh | bash` and try again."
+            }
+            messages.append(ChatMessage(id: UUID(), role: .assistant, text: confirmation))
+            return
+        }
+
         let userMessageId = UUID()
         messages.append(ChatMessage(id: userMessageId, role: .user, text: text))
         isStreaming = true

@@ -234,7 +234,7 @@ struct VibeBuddyInputBar: View {
             TextField(
                 "",
                 text: $draft,
-                prompt: Text("Ask anything about your screen…")
+                prompt: Text("Type / for quick access")
                     .foregroundColor(DS.Colors.textTertiary)
             )
             .textFieldStyle(.plain)
@@ -262,9 +262,9 @@ struct VibeBuddyInputBar: View {
         .padding(.leading, 12)
         .padding(.trailing, 5)
         .padding(.vertical, 5)
-        .background(Capsule().fill(DS.Colors.surface2))
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(DS.Colors.surface2))
         .overlay(
-            Capsule().stroke(
+            RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(
                 isFocused ? DS.Colors.accent.opacity(0.45) : DS.Colors.borderSubtle,
                 lineWidth: 1
             )
