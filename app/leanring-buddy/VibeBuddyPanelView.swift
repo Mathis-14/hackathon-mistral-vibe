@@ -41,6 +41,14 @@ struct VibeBuddyPanelView: View {
     /// Called with the trimmed input text when the user presses Return
     /// or clicks send. The view clears its own input field.
     let onSubmit: (String) -> Void
+    /// Optional compact view rendered top-right in the header (e.g. the
+    /// RoutinesBadge / a tab toggle). Defaulted so all existing call sites
+    /// keep compiling unchanged.
+    var headerAccessory: AnyView? = nil
+    /// When non-nil, replaces the transcript area (header and composer stay)
+    /// — the integrator passes RoutinesView here while the routines tab is
+    /// active. Defaulted so all existing call sites keep compiling unchanged.
+    var overrideContent: AnyView? = nil
 
     /// The panel's natural size — the hosting NSPanel should match this.
     static let preferredSize = CGSize(width: 400, height: 560)
@@ -55,8 +63,14 @@ struct VibeBuddyPanelView: View {
                 .fill(DS.Colors.borderSubtle.opacity(0.7))
                 .frame(height: 1)
 
-            transcript
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Group {
+                if let overrideContent {
+                    overrideContent
+                } else {
+                    transcript
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             footer
         }
@@ -86,6 +100,10 @@ struct VibeBuddyPanelView: View {
             }
 
             Spacer()
+
+            if let headerAccessory {
+                headerAccessory
+            }
 
             Image(systemName: "sparkle")
                 .font(.system(size: 13, weight: .medium))
@@ -195,6 +213,33 @@ struct VibeBuddyPanelView: View {
         ],
         isStreaming: true,
         onSubmit: { print("submit: \($0)") }
+    )
+    .padding(40)
+    .background(Color(hex: "#0D0D0D"))
+}
+
+#Preview("Override content (routines tab)") {
+    let store = RoutineStore.previewStore(routines: [
+        Routine(
+            name: "Morning brief",
+            prompt: "Short brief of the day: calendar, weather, headlines.",
+            intervalMinutes: 60,
+            isEnabled: true,
+            lastRunAt: Date().addingTimeInterval(-300),
+            lastArtifact: "Demo rehearsal at 18:30, judging at 21:00. Paris 24°C and clear."
+        ),
+    ])
+    return VibeBuddyPanelView(
+        messages: [],
+        isStreaming: false,
+        onSubmit: { print("submit: \($0)") },
+        headerAccessory: AnyView(RoutinesBadge(store: store)),
+        overrideContent: AnyView(
+            RoutinesView(
+                store: store,
+                scheduler: RoutineScheduler(store: store, startsAutomatically: false)
+            )
+        )
     )
     .padding(40)
     .background(Color(hex: "#0D0D0D"))
