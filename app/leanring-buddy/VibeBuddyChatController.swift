@@ -224,7 +224,7 @@ struct VibeBuddyPanelContainer: View {
                 .foregroundStyle(DS.Colors.textTertiary)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 6)
-                .background(DS.Colors.surface2, in: Capsule())
+                .background(DS.Colors.surface2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .help("Quit Vibe Buddy")
@@ -244,7 +244,7 @@ struct VibeBuddyPanelContainer: View {
             .foregroundStyle(DS.Colors.textSecondary)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(DS.Colors.surface2, in: Capsule())
+            .background(DS.Colors.surface2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(isShowingRoutines ? "Back to chat" : "Routines")
