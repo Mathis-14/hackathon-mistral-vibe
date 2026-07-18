@@ -88,6 +88,7 @@ final class VibeBuddyChatController: ObservableObject {
                     actuate(appNames)
                 }
                 appendToAssistantMessage(actuationParser.flush())
+                executeTrailingURLToken(onMessageId: assistantMessageId)
                 lastReplyWasReplayed = result.isReplayed
             } catch {
                 appendToAssistantMessage(actuationParser.flush())
@@ -96,6 +97,36 @@ final class VibeBuddyChatController: ObservableObject {
             }
             isStreaming = false
         }
+    }
+
+    /// The worker contract also allows a single trailing `[OPEN_URL:…]` token
+    /// (worker/CONTRACT.md). URLs stream as plain text through the OPEN_APP
+    /// parser, so they are handled here on the fully-accumulated reply:
+    /// strip the token from the message, open the URL, draw the trace.
+    private func executeTrailingURLToken(onMessageId messageId: UUID?) {
+        guard let messageId,
+              let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let text = messages[index].text
+        guard let match = text.range(
+            of: #"\[OPEN_URL:([^\]]+)\]\s*$"#,
+            options: .regularExpression
+        ) else { return }
+
+        let token = String(text[match])
+        let urlString = token
+            .replacingOccurrences(of: "[OPEN_URL:", with: "")
+            .replacingOccurrences(of: "]", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        messages[index].text = String(text[..<match.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let url = URL(string: urlString) else {
+            print("🔗 Actuation: invalid OPEN_URL target — \(urlString)")
+            return
+        }
+        ActuationOverlay.shared.showTrace(appName: url.host ?? "Link")
+        NSWorkspace.shared.open(url)
     }
 
     /// Captures the frontmost display (the one with the cursor) as a JPEG
