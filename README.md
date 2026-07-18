@@ -6,13 +6,15 @@ The desktop companion the Vibe family is missing. Vibe Buddy is a macOS menu-bar
 
 Built in one day at the **Mistral Vibe Hackathon — Paris, July 18th 2026**.
 
-![Vibe Buddy summoned over Calendar](docs/assets/panel-summon.png)
+![Vibe Buddy landing page](docs/assets/landing-page.png)
 
 ## Why
 
 The desktop is where work happens, and Mistral isn't there. ChatGPT and Claude sit in the macOS menu bar, one keystroke from every workflow; Mistral users open a browser tab. Vibe Buddy closes that gap: an ambient, always-available Mistral surface that lives in the menu bar and summons anywhere.
 
 ## What it does
+
+![Vibe Buddy summoned over Calendar](docs/assets/panel-summon.png)
 
 - **Summon from anywhere** — press `fn + control` over any app and the panel appears in under a second (CGEvent listen-only tap on modifier flags; menu-bar-only app, no Dock icon).
 - **It sees your screen** — a screenshot is captured at summon time (ScreenCaptureKit) and attached to your question as visual context. You can see it pinned to your message, and opt out.
@@ -127,8 +129,6 @@ The full wire contract lives in [`worker/CONTRACT.md`](worker/CONTRACT.md).
 ## Landing page
 
 A one-page site with the pitch, draggable feature cards, and the downloadable signed `.dmg` — live at [hackathon-mistral-vibe.vercel.app](https://hackathon-mistral-vibe.vercel.app).
-
-![Vibe Buddy landing page](docs/assets/landing-page.png)
 
 ```bash
 cd landing && npm install && npm run dev
