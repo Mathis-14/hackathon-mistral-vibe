@@ -46,7 +46,6 @@ worker/src/   # index.ts — single fetch handler: /chat (translate + stream, DE
 fixtures/     # recorded SSE replies, demo screenshots, transcript fixture, pre-baked routine artifact
 landing/      # one-page download site + .dmg link (Mathis, second Mac — never gates the demo)
 scripts/      # smoke.sh
-docs/agent-context/   # session-derived reference: Mistral design truths, OriginKit recipe, landing ship state — read INDEX.md before UI work
 ```
 
 - Dependencies point inward: `app → worker HTTP contract ← fixtures`. The Swift app never sees a provider format or an API key — only the worker's SSE shape.
@@ -122,8 +121,6 @@ Never fire a live routine on stage — the routine result and its alert are pre-
 - D009 — Split: Edouard owns ALL of `app/` (Swift engine + UI); Mathis owns `worker/` agentic layer + `fixtures/` + landing page/.dmg (built on his second Mac) + PRODUCT/demo. Why: nobody shares an Xcode target; Mathis's tracks ship independently.
 - D010 — Landing page + signed .dmg are IN as a Mathis parallel track that never gates the live demo. Why: product-feel win judges reward; notarization delays must not threaten 21:00.
 - D011 — Feature freeze 19:30, then fixtures/backup video + rehearse ×2 (once from the .dmg install if it exists); demo ~21:00. Why: adopted from Edouard's plan, shifted to the real event schedule.
-- D012 — Landing = Next.js 16 one-pager (`landing/`), cream Mistral 2026 theme, OriginKit components VENDORED as source (`landing/components/originkit/`, recipe in `docs/agent-context/originkit.md`), download button serves `landing/public/VibeBuddy.dmg` (placeholder until release.sh artifact). Shipped via PR #1 on `feat/landing-ui`. Why: judges reward product-feel; vendoring means zero registry/runtime deps beyond framer-motion+three. Note: kickoff deck says submissions due 18:00 with demo video — earlier than D011's freeze; Mathis arbitrates timing.
-- D013 — Design truths verified from live mistral.ai (2026-07-18): ink/dark surfaces are NAVY `#151524` (not `#1a1a1a`) and hero orange is `#FA500F` (not `#FF7000`); tokens + flag gradient recorded in `docs/agent-context/mistral-design.md`. Why: v1 re-theme of DesignSystem.swift should use verified values, not the estimates written before verification.
 
 ## Demo checklist (run before the demo)
 

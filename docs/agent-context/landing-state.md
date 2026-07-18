@@ -16,6 +16,13 @@ trusting; this moves hourly.**
 - Scope: hero-only one-pager; swipe-stack inside the hero; slim footer.
 - Download: real file path `landing/public/VibeBuddy.dmg` + Vercel deploy.
 - Branch used: `feat/landing-ui` (user overrode the wip/<name> convention for this track).
+- Implementation: Next.js 16 one-pager with OriginKit components vendored as source under
+  `landing/components/originkit/`; this keeps the UI independent of a component registry
+  and adds no runtime dependencies beyond Framer Motion and Three.js.
+- Why: judges reward product feel, while this parallel landing track must never gate the
+  live demo.
+- Timing warning: the kickoff deck says submissions are due at 18:00 with a demo video,
+  earlier than the 19:30 feature freeze recorded in D011; Mathis arbitrates the timing.
 
 ## Open actions
 
