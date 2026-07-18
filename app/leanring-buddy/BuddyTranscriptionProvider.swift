@@ -30,16 +30,17 @@ protocol BuddyTranscriptionProvider {
 }
 
 enum BuddyTranscriptionProviderFactory {
-    // Orchestral: Voxtral (via the OpenAI-compatible transcription provider,
-    // pointed at api.mistral.ai) is the primary backend; Apple Speech stays as
-    // the zero-config on-device fallback so push-to-talk always works.
+    // Voxtral through the local worker (/transcribe) is the primary backend —
+    // keys live worker-side only (MUST #5, D018). Apple Speech stays as the
+    // zero-config on-device fallback so push-to-talk always works even when
+    // wrangler dev is down.
     static func makeDefaultProvider() -> any BuddyTranscriptionProvider {
-        let voxtralProvider = OpenAIAudioTranscriptionProvider()
+        let voxtralProvider = WorkerTranscriptionProvider()
         if voxtralProvider.isConfigured {
-            print("🎙️ Transcription: using \(voxtralProvider.displayName)")
+            print("🎙️ Transcription: using \(voxtralProvider.displayName) via worker /transcribe")
             return voxtralProvider
         }
-        print("⚠️ Transcription: Voxtral not configured, falling back to Apple Speech")
+        print("⚠️ Transcription: worker unavailable, falling back to Apple Speech")
         return AppleSpeechTranscriptionProvider()
     }
 }
