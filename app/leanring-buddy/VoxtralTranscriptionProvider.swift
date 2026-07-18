@@ -1,17 +1,21 @@
 //
-//  WorkerTranscriptionProvider.swift
-//  leanring-buddy
+//  VoxtralTranscriptionProvider.swift
+//  Vibe Buddy
 //
-//  Voice transcription via the local Vibe Buddy worker (POST /transcribe →
-//  Mistral Voxtral). The worker holds the API key (MUST #5) — this provider
-//  sends NO auth. Contract: worker/CONTRACT.md. Response shape matches the
-//  same {"text": ...} decoder the OpenAI provider uses.
+//  Push-to-talk transcription through Mistral's Voxtral, via the worker's
+//  /transcribe route (multipart passthrough to /v1/audio/transcriptions,
+//  model voxtral-mini-latest). The app never holds an API key (MUST #5) —
+//  the worker injects it server-side.
+//
+//  Config (UserDefaults):
+//    vibebuddy.workerURL  — worker base URL, default http://127.0.0.1:8787
+//    vibebuddy.stt        — set to "apple" to force the on-device fallback
 //
 
 import AVFoundation
 import Foundation
 
-struct WorkerTranscriptionProviderError: LocalizedError {
+struct VoxtralTranscriptionProviderError: LocalizedError {
     let message: String
 
     var errorDescription: String? {
@@ -19,22 +23,26 @@ struct WorkerTranscriptionProviderError: LocalizedError {
     }
 }
 
-final class WorkerTranscriptionProvider: BuddyTranscriptionProvider {
-    static let defaultEndpoint = URL(string: "http://127.0.0.1:8787/transcribe")!
+final class VoxtralTranscriptionProvider: BuddyTranscriptionProvider {
+    static let workerURLDefaultsKey = "vibebuddy.workerURL"
+    static let sttModeDefaultsKey = "vibebuddy.stt"
 
     let displayName = "Voxtral"
     let requiresSpeechRecognitionPermission = false
 
-    // The worker needs no client-side configuration — reachability failures
-    // surface per-request, and the dictation manager's provider fallback
-    // chain handles them.
-    var isConfigured: Bool { true }
-    var unavailableExplanation: String? { nil }
+    var isConfigured: Bool {
+        UserDefaults.standard.string(forKey: Self.sttModeDefaultsKey) != "apple"
+    }
 
-    private let endpoint: URL
+    var unavailableExplanation: String? {
+        guard !isConfigured else { return nil }
+        return "Voxtral is disabled (vibebuddy.stt=apple) — using Apple Speech."
+    }
 
-    init(endpoint: URL = WorkerTranscriptionProvider.defaultEndpoint) {
-        self.endpoint = endpoint
+    static var transcribeURL: URL {
+        let base = UserDefaults.standard.string(forKey: workerURLDefaultsKey)
+            ?? "http://127.0.0.1:8787"
+        return URL(string: base)!.appendingPathComponent("transcribe")
     }
 
     func startStreamingSession(
@@ -43,8 +51,8 @@ final class WorkerTranscriptionProvider: BuddyTranscriptionProvider {
         onFinalTranscriptReady: @escaping (String) -> Void,
         onError: @escaping (Error) -> Void
     ) async throws -> any BuddyStreamingTranscriptionSession {
-        WorkerTranscriptionSession(
-            endpoint: endpoint,
+        VoxtralTranscriptionSession(
+            transcribeURL: Self.transcribeURL,
             onTranscriptUpdate: onTranscriptUpdate,
             onFinalTranscriptReady: onFinalTranscriptReady,
             onError: onError
@@ -52,7 +60,7 @@ final class WorkerTranscriptionProvider: BuddyTranscriptionProvider {
     }
 }
 
-private final class WorkerTranscriptionSession: BuddyStreamingTranscriptionSession {
+private final class VoxtralTranscriptionSession: BuddyStreamingTranscriptionSession {
     let finalTranscriptFallbackDelaySeconds: TimeInterval = 8.0
 
     private struct TranscriptionResponse: Decodable {
@@ -61,12 +69,12 @@ private final class WorkerTranscriptionSession: BuddyStreamingTranscriptionSessi
 
     private static let targetSampleRate = 16_000
 
-    private let endpoint: URL
+    private let transcribeURL: URL
     private let onTranscriptUpdate: (String) -> Void
     private let onFinalTranscriptReady: (String) -> Void
     private let onError: (Error) -> Void
 
-    private let stateQueue = DispatchQueue(label: "com.vibebuddy.worker.transcription")
+    private let stateQueue = DispatchQueue(label: "com.vibebuddy.voxtral.transcription")
     private let audioPCM16Converter = BuddyPCM16AudioConverter(
         targetSampleRate: Double(targetSampleRate)
     )
@@ -79,19 +87,19 @@ private final class WorkerTranscriptionSession: BuddyStreamingTranscriptionSessi
     private var transcriptionUploadTask: Task<Void, Never>?
 
     init(
-        endpoint: URL,
+        transcribeURL: URL,
         onTranscriptUpdate: @escaping (String) -> Void,
         onFinalTranscriptReady: @escaping (String) -> Void,
         onError: @escaping (Error) -> Void
     ) {
-        self.endpoint = endpoint
+        self.transcribeURL = transcribeURL
         self.onTranscriptUpdate = onTranscriptUpdate
         self.onFinalTranscriptReady = onFinalTranscriptReady
         self.onError = onError
 
         let urlSessionConfiguration = URLSessionConfiguration.default
-        urlSessionConfiguration.timeoutIntervalForRequest = 45
-        urlSessionConfiguration.timeoutIntervalForResource = 90
+        urlSessionConfiguration.timeoutIntervalForRequest = 30
+        urlSessionConfiguration.timeoutIntervalForResource = 60
         self.urlSession = URLSession(configuration: urlSessionConfiguration)
     }
 
@@ -113,8 +121,13 @@ private final class WorkerTranscriptionSession: BuddyStreamingTranscriptionSessi
             self.hasRequestedFinalTranscript = true
 
             let bufferedPCM16AudioData = self.bufferedPCM16AudioData
-            self.transcriptionUploadTask = Task { [weak self] in
-                await self?.transcribeBufferedAudio(bufferedPCM16AudioData)
+            // Strong capture ON PURPOSE: the dictation manager releases the
+            // session right after stop, so this task is what keeps the
+            // session alive until the upload delivers the transcript (the
+            // weak-capture version deallocated mid-flight and the panel hung
+            // on "Transcribing…" forever). The task ends, the cycle breaks.
+            self.transcriptionUploadTask = Task {
+                await self.transcribeBufferedAudio(bufferedPCM16AudioData)
             }
         }
     }
@@ -157,42 +170,47 @@ private final class WorkerTranscriptionSession: BuddyStreamingTranscriptionSessi
             deliverFinalTranscript(transcriptText)
         } catch {
             guard !stateQueue.sync(execute: { isCancelled }) else { return }
-            print("[Voxtral Transcription] ❌ Upload failed (audio size: \(wavAudioData.count) bytes): \(error.localizedDescription)")
+            print("[Voxtral] ❌ /transcribe failed (audio size: \(wavAudioData.count) bytes): \(error.localizedDescription)")
             onError(error)
         }
     }
 
     private func requestTranscription(for wavAudioData: Data) async throws -> String {
         let multipartBoundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: endpoint)
+        var request = URLRequest(url: transcribeURL)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(multipartBoundary)", forHTTPHeaderField: "Content-Type")
 
-        // No language field: Voxtral auto-detects, so French push-to-talk
-        // works on stage without a toggle.
+        // Minimal field set: the worker owns auth and forces the model when
+        // absent; no language field so Voxtral auto-detects (FR/EN demo).
         var requestBodyData = Data()
-        requestBodyData.appendWorkerMultipartFileField(
+        requestBodyData.appendMultipartFormField(
+            named: "model",
+            value: "voxtral-mini-latest",
+            usingBoundary: multipartBoundary
+        )
+        requestBodyData.appendMultipartFileField(
             named: "file",
             filename: "voice-input.wav",
             mimeType: "audio/wav",
             fileData: wavAudioData,
             usingBoundary: multipartBoundary
         )
-        requestBodyData.appendWorkerString("--\(multipartBoundary)--\r\n")
+        requestBodyData.appendString("--\(multipartBoundary)--\r\n")
         request.httpBody = requestBodyData
 
         let (responseData, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw WorkerTranscriptionProviderError(
-                message: "Worker transcription returned an invalid response."
+            throw VoxtralTranscriptionProviderError(
+                message: "The worker /transcribe returned an invalid response."
             )
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
             let responseText = String(data: responseData, encoding: .utf8) ?? "Unknown error"
-            throw WorkerTranscriptionProviderError(
-                message: "Worker transcription failed (\(httpResponse.statusCode)): \(responseText)"
+            throw VoxtralTranscriptionProviderError(
+                message: "Worker /transcribe failed (\(httpResponse.statusCode)): \(responseText)"
             )
         }
 
@@ -203,8 +221,8 @@ private final class WorkerTranscriptionSession: BuddyStreamingTranscriptionSessi
             return transcriptionResponse.text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        throw WorkerTranscriptionProviderError(
-            message: "Worker transcription returned an unexpected body."
+        throw VoxtralTranscriptionProviderError(
+            message: "Worker /transcribe returned no transcript text."
         )
     }
 
@@ -215,26 +233,40 @@ private final class WorkerTranscriptionSession: BuddyStreamingTranscriptionSessi
     }
 
     deinit {
-        cancel()
+        // No cancel() here: dispatching a self-capturing block from deinit is
+        // the "dangling reference" runtime warning. By deinit time the upload
+        // task has either finished (it retains self) or was cancelled
+        // explicitly by the dictation manager.
+        urlSession.invalidateAndCancel()
     }
 }
 
 private extension Data {
-    mutating func appendWorkerString(_ string: String) {
+    mutating func appendString(_ string: String) {
         append(string.data(using: .utf8)!)
     }
 
-    mutating func appendWorkerMultipartFileField(
+    mutating func appendMultipartFormField(
+        named fieldName: String,
+        value: String,
+        usingBoundary boundary: String
+    ) {
+        appendString("--\(boundary)\r\n")
+        appendString("Content-Disposition: form-data; name=\"\(fieldName)\"\r\n\r\n")
+        appendString("\(value)\r\n")
+    }
+
+    mutating func appendMultipartFileField(
         named fieldName: String,
         filename: String,
         mimeType: String,
         fileData: Data,
         usingBoundary boundary: String
     ) {
-        appendWorkerString("--\(boundary)\r\n")
-        appendWorkerString("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(filename)\"\r\n")
-        appendWorkerString("Content-Type: \(mimeType)\r\n\r\n")
+        appendString("--\(boundary)\r\n")
+        appendString("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(filename)\"\r\n")
+        appendString("Content-Type: \(mimeType)\r\n\r\n")
         append(fileData)
-        appendWorkerString("\r\n")
+        appendString("\r\n")
     }
 }

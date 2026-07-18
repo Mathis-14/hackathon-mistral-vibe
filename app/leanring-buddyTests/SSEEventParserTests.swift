@@ -66,4 +66,22 @@ final class SSEEventParserTests: XCTestCase {
         }
         XCTAssertEqual(collected, [.delta("abc"), .done])
     }
+    func testCanonicalWorkerShapeContentBlockDelta() {
+        var parser = SSEEventParser()
+        let events = parser.feed(chunk: """
+        event: message_start
+        data: {"type":"message_start","message":{"id":"msg_1","role":"assistant"}}
+
+        event: content_block_delta
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello "}}
+
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"world"}}
+
+        event: message_stop
+        data: {"type":"message_stop"}
+
+        """)
+        XCTAssertEqual(events, [.delta("Hello "), .delta("world"), .done])
+    }
+
 }
