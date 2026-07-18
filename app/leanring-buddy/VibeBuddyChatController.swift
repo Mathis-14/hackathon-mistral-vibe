@@ -17,6 +17,10 @@ import SwiftUI
 final class VibeBuddyChatController: ObservableObject {
     @Published private(set) var messages: [ChatMessage] = []
     @Published private(set) var isStreaming = false
+
+    /// True while the current stream was initiated by voice (push-to-talk /
+    /// wake word). Drives which thinking indicator each surface shows.
+    @Published private(set) var isVoiceInitiatedStream = false
     /// True when the last reply came from the replay fixture — the UI can
     /// badge it so a rehearsal never gets mistaken for a live run.
     @Published private(set) var lastReplyWasReplayed = false
@@ -32,7 +36,14 @@ final class VibeBuddyChatController: ObservableObject {
         UserDefaults.standard.object(forKey: Self.includeScreenshotDefaultsKey) as? Bool ?? true
     }
 
-    func submit(_ text: String) {
+    /// Where a submission came from — voice keeps the on-screen cat overlay,
+    /// typed chat shows the in-panel thinking cat instead.
+    enum SubmissionSource {
+        case typed
+        case voice
+    }
+
+    func submit(_ text: String, source: SubmissionSource = .typed) {
         guard !isStreaming else { return }
 
         // "/vibe <task>" (typed) or "Vibe, <task>" (spoken) launches a real
@@ -54,6 +65,7 @@ final class VibeBuddyChatController: ObservableObject {
 
         let userMessageId = UUID()
         messages.append(ChatMessage(id: userMessageId, role: .user, text: text))
+        isVoiceInitiatedStream = (source == .voice)
         isStreaming = true
 
         let history = messages.map { message in
@@ -117,6 +129,7 @@ final class VibeBuddyChatController: ObservableObject {
                 messages.append(ChatMessage(id: UUID(), role: .assistant, text: explanation))
             }
             isStreaming = false
+            isVoiceInitiatedStream = false
         }
     }
 
@@ -203,6 +216,9 @@ struct VibeBuddyPanelContainer: View {
     let routineScheduler: RoutineScheduler
     @ObservedObject var permissionsSource: CompanionManager
     @State private var isShowingRoutines = false
+    /// Session whose transcript is open in the inspector. Mutually
+    /// exclusive with the routines tab — selection wins.
+    @State private var selectedSession: VibeSession?
     @StateObject private var vibeSessionWatcher = VibeSessionWatcher()
 
     private var permissionsBanner: AnyView? {
@@ -219,20 +235,41 @@ struct VibeBuddyPanelContainer: View {
         VibeBuddyPanelView(
             messages: controller.messages,
             isStreaming: controller.isStreaming,
+            isVoiceStream: controller.isVoiceInitiatedStream,
             onSubmit: { [weak controller] text in controller?.submit(text) },
             headerAccessory: AnyView(HStack(spacing: 6) {
                 routinesToggleButton
                 quitButton
             }),
-            overrideContent: isShowingRoutines
-                ? AnyView(RoutinesView(store: routineStore, scheduler: routineScheduler))
-                : nil,
-            belowTranscript: vibeSessionWatcher.sessions.isEmpty || isShowingRoutines
+            overrideContent: overrideContent,
+            belowTranscript: vibeSessionWatcher.sessions.isEmpty || isShowingRoutines || selectedSession != nil
                 ? nil
-                : AnyView(VibeSessionsStrip(sessions: vibeSessionWatcher.sessions)),
+                : AnyView(VibeSessionsStrip(sessions: vibeSessionWatcher.sessions) { session in
+                    selectedSession = session
+                    isShowingRoutines = false
+                }),
             banner: permissionsBanner
         )
         .onAppear { vibeSessionWatcher.start() }
+    }
+
+    /// Transcript inspector (session selection) wins over the routines tab;
+    /// nil falls back to the regular chat transcript. `.id` resets the
+    /// inspector's local state when switching between sessions.
+    private var overrideContent: AnyView? {
+        if let selectedSession {
+            return AnyView(
+                VibeSessionTranscriptView(
+                    session: selectedSession,
+                    onBack: { self.selectedSession = nil }
+                )
+                .id(selectedSession.id)
+            )
+        }
+        if isShowingRoutines {
+            return AnyView(RoutinesView(store: routineStore, scheduler: routineScheduler))
+        }
+        return nil
     }
 
     private var quitButton: some View {
@@ -253,6 +290,7 @@ struct VibeBuddyPanelContainer: View {
     private var routinesToggleButton: some View {
         Button {
             isShowingRoutines.toggle()
+            if isShowingRoutines { selectedSession = nil }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isShowingRoutines ? "bubble.left.fill" : "clock.arrow.2.circlepath")

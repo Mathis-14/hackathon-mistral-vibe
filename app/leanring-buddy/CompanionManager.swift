@@ -442,6 +442,18 @@ final class CompanionManager: ObservableObject {
     private func handleShortcutTransition(_ transition: BuddyPushToTalkShortcut.ShortcutTransition) {
         switch transition {
         case .pressed:
+            startVoiceCapture(dismissingPanel: true)
+        case .released:
+            endVoiceCapture()
+        case .none:
+            break
+        }
+    }
+
+    /// Starts a voice capture through the same pipeline as push-to-talk.
+    /// `dismissingPanel: false` keeps the panel visible — used by the
+    /// wake-word flow where the panel just slid in.
+    private func startVoiceCapture(dismissingPanel: Bool) {
             guard !buddyDictationManager.isDictationInProgress else { return }
             // Don't register push-to-talk while the onboarding video is playing
             guard !showOnboardingVideo else { return }
@@ -458,7 +470,9 @@ final class CompanionManager: ObservableObject {
             }
 
             // Dismiss the menu bar panel so it doesn't cover the screen
-            NotificationCenter.default.post(name: .clickyDismissPanel, object: nil)
+            if dismissingPanel {
+                NotificationCenter.default.post(name: .clickyDismissPanel, object: nil)
+            }
 
             clearDetectedElementLocation()
 
@@ -491,17 +505,77 @@ final class CompanionManager: ObservableObject {
                     }
                 )
             }
-        case .released:
-            // Cancel the pending start task in case the user released the shortcut
-            // before the async startPushToTalk had a chance to begin recording.
-            // Without this, a quick press-and-release drops the release event and
-            // leaves the waveform overlay stuck on screen indefinitely.
-            ClickyAnalytics.trackPushToTalkReleased()
-            pendingKeyboardShortcutStartTask?.cancel()
-            pendingKeyboardShortcutStartTask = nil
-            buddyDictationManager.stopPushToTalkFromKeyboardShortcut()
-        case .none:
-            break
+    }
+
+    /// Stops the capture and lets the provider deliver the final transcript.
+    /// Safe to call when nothing is recording.
+    private func endVoiceCapture() {
+        // Cancel the pending start task in case capture ends before the async
+        // startPushToTalk had a chance to begin recording — otherwise the
+        // waveform overlay can stay stuck on screen indefinitely.
+        ClickyAnalytics.trackPushToTalkReleased()
+        pendingKeyboardShortcutStartTask?.cancel()
+        pendingKeyboardShortcutStartTask = nil
+        buddyDictationManager.stopPushToTalkFromKeyboardShortcut()
+    }
+
+    // MARK: - Wake-word triggered capture
+
+    private var wakeCaptureSupervisor: Task<Void, Never>?
+
+    /// « Hey Vibe, <command> » : opens a hands-free capture window right
+    /// after the wake word fires. A small level-based VAD closes it after
+    /// ~1.2s of post-speech silence; no speech at all cancels quietly (the
+    /// empty transcript is filtered upstream).
+    func beginWakeTriggeredCapture() {
+        guard !buddyDictationManager.isDictationInProgress else { return }
+        startVoiceCapture(dismissingPanel: false)
+
+        wakeCaptureSupervisor?.cancel()
+        wakeCaptureSupervisor = Task { [weak self] in
+            await self?.superviseWakeCapture()
+        }
+    }
+
+    private func superviseWakeCapture() async {
+        let defaults = UserDefaults.standard
+        let speechThreshold = CGFloat(defaults.object(forKey: "vibebuddy.wakeSpeechThreshold") as? Double ?? 0.06)
+        let silenceWindow = defaults.object(forKey: "vibebuddy.wakeSilenceSeconds") as? Double ?? 1.2
+        let noSpeechTimeout = 4.0
+        let hardCap = 12.0
+
+        let startedAt = Date()
+        var speechDetected = false
+        var lastSpeechAt = Date()
+        var peakLevel: CGFloat = 0
+
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(80))
+            let level = currentAudioPowerLevel
+            peakLevel = max(peakLevel, level)
+            let now = Date()
+
+            if level >= speechThreshold {
+                speechDetected = true
+                lastSpeechAt = now
+            }
+
+            let elapsed = now.timeIntervalSince(startedAt)
+            if !speechDetected && elapsed > noSpeechTimeout {
+                print(String(format: "🎧 Wake capture: no speech (peak %.3f) — cancelling", peakLevel))
+                endVoiceCapture()
+                return
+            }
+            if speechDetected && now.timeIntervalSince(lastSpeechAt) > silenceWindow {
+                print(String(format: "🎧 Wake capture: silence after speech (peak %.3f) — submitting", peakLevel))
+                endVoiceCapture()
+                return
+            }
+            if elapsed > hardCap {
+                print("🎧 Wake capture: hard cap reached — submitting")
+                endVoiceCapture()
+                return
+            }
         }
     }
 

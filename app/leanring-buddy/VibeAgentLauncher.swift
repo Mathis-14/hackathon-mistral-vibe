@@ -66,6 +66,59 @@ enum VibeAgentLauncher {
         }
     }
 
+    /// Resumes an existing Vibe Code session with a follow-up task — the
+    /// steering path of the session inspector. `sessionId` is the meta.json
+    /// `session_id` UUID (NOT the log directory name — the CLI rejects it).
+    /// The resumed run writes a NEW session directory carrying the full
+    /// history, which VibeSessionWatcher surfaces as active within seconds.
+    /// Same binary resolution and detached fire-and-forget pattern as
+    /// `launch`. Returns false when the vibe binary is missing or the spawn
+    /// fails.
+    @discardableResult
+    static func resume(sessionId: String, task: String, workingDirectory: String? = nil) -> Bool {
+        guard let vibeBinary = vibeBinaryCandidates.first(where: {
+            FileManager.default.isExecutableFile(atPath: $0)
+        }) else {
+            print("🧑‍💻 Vibe launcher: no vibe binary found — install the Vibe Code CLI")
+            return false
+        }
+
+        // Prefer the session's own working directory so the resumed agent
+        // sees the same project; fall back to the configured default.
+        let directory: String = {
+            if let workingDirectory, !workingDirectory.isEmpty,
+               FileManager.default.fileExists(atPath: workingDirectory) {
+                return workingDirectory
+            }
+            return projectDirectory
+        }()
+
+        let agent = Process()
+        agent.executableURL = URL(fileURLWithPath: vibeBinary)
+        agent.arguments = [
+            "--resume", sessionId,
+            "-p", task,
+            "--output", "streaming",
+            "--trust",
+            "--auto-approve",
+            "--max-price", "1.0",
+            "--max-turns", "25",
+        ]
+        agent.currentDirectoryURL = URL(fileURLWithPath: directory)
+        agent.environment = ProcessInfo.processInfo.environment
+        agent.standardOutput = FileHandle.nullDevice
+        agent.standardError = FileHandle.nullDevice
+
+        do {
+            try agent.run()
+            print("🧑‍💻 Vibe launcher: resumed session \(sessionId) (pid \(agent.processIdentifier)) in \(directory)")
+            return true
+        } catch {
+            print("🧑‍💻 Vibe launcher: failed to resume — \(error.localizedDescription)")
+            return false
+        }
+    }
+
     /// Extracts a Vibe Code task from user input when it uses one of the
     /// launch prefixes: typed "/vibe <task>" or spoken "Vibe, <task>" /
     /// "Vibe <task>". Returns nil for normal chat messages.

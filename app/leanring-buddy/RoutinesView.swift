@@ -176,7 +176,7 @@ struct RoutinesView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(DS.Colors.textPrimary)
 
-                Text("Schedule a prompt to run on repeat —\nresults land as native macOS alerts.")
+                Text("Schedule a prompt to run on repeat.\nResults land as native macOS alerts.")
                     .font(.system(size: 12))
                     .foregroundColor(DS.Colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -327,7 +327,7 @@ private struct RoutineRow: View {
                     .stroke(DS.Colors.borderSubtle.opacity(0.7), lineWidth: 1)
             )
         } else {
-            Text("No artifact yet — run the routine to produce one.")
+            Text("No artifact yet. Run the routine to produce one.")
                 .font(.system(size: 11))
                 .foregroundColor(DS.Colors.textTertiary)
         }

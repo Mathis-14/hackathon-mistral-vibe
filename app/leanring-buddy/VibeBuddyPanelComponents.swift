@@ -11,41 +11,6 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Status Dot
-
-/// Small pulsing presence dot: green when idle ("ready"), Mistral orange
-/// while a reply is streaming. A soft ring expands and fades on a loop.
-struct VibeBuddyStatusDot: View {
-    let isStreaming: Bool
-
-    @State private var isPulsing = false
-
-    private var dotColor: Color {
-        isStreaming ? DS.Colors.accent : DS.Colors.success
-    }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(dotColor.opacity(isPulsing ? 0 : 0.5), lineWidth: 1.5)
-                .frame(width: 8, height: 8)
-                .scaleEffect(isPulsing ? 2.4 : 1.0)
-
-            Circle()
-                .fill(dotColor)
-                .frame(width: 8, height: 8)
-                .shadow(color: dotColor.opacity(0.6), radius: 4)
-        }
-        .frame(width: 20, height: 20)
-        .animation(.easeOut(duration: DS.Animation.normal), value: isStreaming)
-        .onAppear {
-            withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                isPulsing = true
-            }
-        }
-    }
-}
-
 // MARK: - Chat Bubble
 
 /// One transcript bubble. User messages sit right-aligned in an
@@ -261,25 +226,16 @@ struct VibeBuddyThinkingBubble: View {
 /// Friendly first-run hint shown when the transcript is empty.
 struct VibeBuddyEmptyState: View {
     var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(DS.Colors.accentSubtle)
-                    .frame(width: 64, height: 64)
-                Circle()
-                    .stroke(DS.Colors.accent.opacity(0.25), lineWidth: 1)
-                    .frame(width: 64, height: 64)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(DS.Colors.accentText)
-            }
+        VStack(spacing: 18) {
+            MistralEmblemView()
+                .frame(width: 52, height: 37)
 
             VStack(spacing: 6) {
                 Text("Ask me anything")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(DS.Colors.textPrimary)
 
-                Text("Vibe Buddy answers right here, over whatever\nyou're working on — summon it from anywhere.")
+                Text("Vibe Buddy answers right here, over whatever\nyou're working on. Summon it from anywhere.")
                     .font(.system(size: 12))
                     .foregroundColor(DS.Colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -290,6 +246,21 @@ struct VibeBuddyEmptyState: View {
         // the heavier footer.
         .offset(y: -10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Thinking Cat
+
+/// Typed-chat thinking indicator: the walking pixel cat, assistant-side,
+/// a size up from the header mascot so the wait reads as a deliberate
+/// animation rather than a stall.
+struct VibeBuddyThinkingCat: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            AnimatedGIFView(resourceName: "cat-walking-white")
+                .frame(width: 64, height: 48)
+            Spacer(minLength: 48)
+        }
     }
 }
 
@@ -332,13 +303,15 @@ struct VibeBuddyInputBar: View {
             .onSubmit(submit)
             .overlay(IBeamCursorView())
 
+            // Near-black action button, like the composer button on
+            // chat.mistral.ai — the orange stays reserved for accents.
             Button(action: submit) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(canSend ? DS.Colors.textOnAccent : DS.Colors.textTertiary)
+                    .foregroundColor(canSend ? .white : DS.Colors.textTertiary)
                     .frame(width: 26, height: 26)
                     .background(
-                        Circle().fill(canSend ? DS.Colors.accent : DS.Colors.surface3)
+                        Circle().fill(canSend ? DS.Colors.textPrimary : DS.Colors.surface3)
                     )
             }
             .buttonStyle(.plain)
