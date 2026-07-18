@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  /* Mistral 2026 tokens — verified from mistral.ai live CSS */
+  --paper: #fbfbf8;
+  --paper-2: #f5f4ef;
+  --ink: #151524;
+  --muted: #71717a;
+  --accent: #fa500f;
+  --accent-hover: #ff5229;
+  --hairline: #e4e3de;
+  /* Flag gradient, top → bottom, hard stops */
+  --flag-1: #ffaf01;
+  --flag-2: #ff8204;
+  --flag-3: #fa500f;
+  --flag-4: #e61300;
+  --flag-5: #c4001d;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-hairline: var(--hairline);
+  --color-flag-1: var(--flag-1);
+  --color-flag-2: var(--flag-2);
+  --color-flag-3: var(--flag-3);
+  --color-flag-4: var(--flag-4);
+  --color-flag-5: var(--flag-5);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-space-mono);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--paper);
+}
