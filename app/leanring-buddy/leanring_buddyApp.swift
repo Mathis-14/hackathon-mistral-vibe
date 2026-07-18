@@ -70,7 +70,7 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
         companionManager.onTranscriptReady = { [weak self] transcript in
             guard let panelManager = self?.menuBarPanelManager else { return }
             panelManager.showPanel()
-            panelManager.chatController.submit(transcript)
+            panelManager.chatController.submit(transcript, source: .voice)
         }
         print("🎙️ Vibe Buddy: transcript hook installed — push-to-talk routes into the chat panel")
 
@@ -97,13 +97,16 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
             catOverlayCancellable = companionManager.$voiceState
                 .combineLatest(chatController.$isStreaming)
                 .receive(on: DispatchQueue.main)
-                .sink { voiceState, isStreaming in
+                .sink { [weak chatController] voiceState, isStreaming in
                     switch (voiceState, isStreaming) {
                     case (.listening, _):
                         CatCompanionOverlay.shared.show("Listening…")
                     case (.processing, _):
                         CatCompanionOverlay.shared.show("Transcribing with Voxtral…")
-                    case (_, true):
+                    case (_, true) where chatController?.isVoiceInitiatedStream == true:
+                        // Voice-initiated reply: the cat keeps patrolling.
+                        // Typed chat shows its thinking cat inside the panel
+                        // instead — no overlay on top of the user's window.
                         CatCompanionOverlay.shared.show("Thinking…")
                     default:
                         CatCompanionOverlay.shared.hide()

@@ -656,7 +656,7 @@ struct CompanionPanelView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Got feedback? DM me")
                         .font(.system(size: 12, weight: .semibold))
-                    Text("Bugs, ideas, anything — I read every message.")
+                    Text("Bugs, ideas, anything. I read every message.")
                         .font(.system(size: 10))
                         .foregroundColor(DS.Colors.textTertiary)
                 }
