@@ -8,6 +8,7 @@
 //  and these read as styling.
 //
 
+import AppKit
 import SwiftUI
 
 // MARK: - Status Dot
@@ -70,6 +71,19 @@ struct VibeBuddyChatBubble: View {
                         isUser ? DS.Colors.accent.opacity(0.42) : DS.Colors.borderSubtle,
                         lineWidth: 1
                     ))
+
+                if isUser, let thumbnailData = message.screenshotThumbnail,
+                   let thumbnail = NSImage(data: thumbnailData) {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 150)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(DS.Colors.borderSubtle, lineWidth: 1)
+                        )
+                }
 
                 if isUser && message.hasScreenshot {
                     screenshotCaption

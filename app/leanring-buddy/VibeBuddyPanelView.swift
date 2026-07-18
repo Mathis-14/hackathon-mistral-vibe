@@ -30,6 +30,9 @@ struct ChatMessage: Identifiable, Equatable {
     /// True when a screenshot of the user's screen was attached to this
     /// (user) message. Defaulted so all existing call sites keep compiling.
     var hasScreenshot: Bool = false
+    /// Small JPEG of the attached screenshot, rendered as a thumbnail on
+    /// the bubble so the screen context is visibly real.
+    var screenshotThumbnail: Data? = nil
 }
 
 // MARK: - Vibe Buddy Panel
@@ -93,7 +96,8 @@ struct VibeBuddyPanelView: View {
 
             footer
         }
-        .frame(width: Self.preferredSize.width, height: Self.preferredSize.height)
+        .frame(width: Self.preferredSize.width)
+        .frame(maxHeight: .infinity)
         .background(DS.Colors.background)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
