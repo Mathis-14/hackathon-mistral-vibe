@@ -4,7 +4,7 @@
 //
 //  Manages the NSStatusItem (menu bar icon) and a custom borderless NSPanel
 //  that drops down below it when clicked. The panel hosts a SwiftUI view
-//  (CompanionPanelView) via NSHostingView. Uses the same NSPanel pattern as
+//  (VibeBuddyPanelView) via NSHostingView. Uses the same NSPanel pattern as
 //  FloatingSessionButton and GlobalPushToTalkOverlay for consistency.
 //
 //  The panel is non-activating so it does not steal focus from the user's
@@ -32,8 +32,8 @@ final class MenuBarPanelManager: NSObject {
     private var dismissPanelObserver: NSObjectProtocol?
 
     private let companionManager: CompanionManager
-    private let panelWidth: CGFloat = 320
-    private let panelHeight: CGFloat = 380
+    private let panelWidth: CGFloat = VibeBuddyPanelView.preferredSize.width
+    private let panelHeight: CGFloat = VibeBuddyPanelView.preferredSize.height
 
     init(companionManager: CompanionManager) {
         self.companionManager = companionManager
@@ -65,46 +65,10 @@ final class MenuBarPanelManager: NSObject {
 
         guard let button = statusItem?.button else { return }
 
-        button.image = makeClickyMenuBarIcon()
+        button.image = NSImage(systemSymbolName: "message.badge.waveform", accessibilityDescription: "Vibe Buddy")
         button.image?.isTemplate = true
         button.action = #selector(statusItemClicked)
         button.target = self
-    }
-
-    /// Draws the clicky triangle as a menu bar icon. Uses the same shape
-    /// and rotation as the in-app cursor so the menu bar icon matches.
-    private func makeClickyMenuBarIcon() -> NSImage {
-        let iconSize: CGFloat = 18
-        let image = NSImage(size: NSSize(width: iconSize, height: iconSize))
-        image.lockFocus()
-
-        let triangleSize = iconSize * 0.7
-        let cx = iconSize * 0.50
-        let cy = iconSize * 0.50
-        let height = triangleSize * sqrt(3.0) / 2.0
-
-        let top = CGPoint(x: cx, y: cy + height / 1.5)
-        let bottomLeft = CGPoint(x: cx - triangleSize / 2, y: cy - height / 3)
-        let bottomRight = CGPoint(x: cx + triangleSize / 2, y: cy - height / 3)
-
-        let angle = 35.0 * .pi / 180.0
-        func rotate(_ point: CGPoint) -> CGPoint {
-            let dx = point.x - cx, dy = point.y - cy
-            let cosA = CGFloat(cos(angle)), sinA = CGFloat(sin(angle))
-            return CGPoint(x: cx + cosA * dx - sinA * dy, y: cy + sinA * dx + cosA * dy)
-        }
-
-        let path = NSBezierPath()
-        path.move(to: rotate(top))
-        path.line(to: rotate(bottomLeft))
-        path.line(to: rotate(bottomRight))
-        path.close()
-
-        NSColor.black.setFill()
-        path.fill()
-
-        image.unlockFocus()
-        return image
     }
 
     /// Opens the panel automatically on app launch so the user sees
@@ -150,10 +114,43 @@ final class MenuBarPanelManager: NSObject {
     }
 
     private func createPanel() {
-        let companionPanelView = CompanionPanelView(companionManager: companionManager)
-            .frame(width: panelWidth)
+        // TODO(integration): CompanionManager will own the transcript +
+        // streaming state. Replace the sample messages with its published
+        // values and route onSubmit into its send/stream pipeline. Until
+        // then the panel is fed demo data and logs submissions.
+        let sampleMessages: [ChatMessage] = [
+            ChatMessage(
+                id: UUID(),
+                role: .user,
+                text: "What does this error in my terminal mean?"
+            ),
+            ChatMessage(
+                id: UUID(),
+                role: .assistant,
+                text: "That's a CORS rejection — your worker on 127.0.0.1:8787 doesn't allow the browser origin. Add an Access-Control-Allow-Origin header to the /chat response and retry."
+            ),
+            ChatMessage(
+                id: UUID(),
+                role: .user,
+                text: "Can you open Xcode and get me started?"
+            ),
+            ChatMessage(
+                id: UUID(),
+                role: .assistant,
+                text: "Opening Xcode now — you'll see the trace on screen as I go."
+            ),
+        ]
 
-        let hostingView = NSHostingView(rootView: companionPanelView)
+        let vibeBuddyPanelView = VibeBuddyPanelView(
+            messages: sampleMessages,
+            isStreaming: false,
+            onSubmit: { text in
+                print("VibeBuddy onSubmit: \(text)")
+            }
+        )
+        // END TODO(integration)
+
+        let hostingView = NSHostingView(rootView: vibeBuddyPanelView)
         hostingView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = .clear
@@ -169,7 +166,9 @@ final class MenuBarPanelManager: NSObject {
         menuBarPanel.level = .floating
         menuBarPanel.isOpaque = false
         menuBarPanel.backgroundColor = .clear
-        menuBarPanel.hasShadow = false
+        // Native window shadow hugs the rounded SwiftUI shape (the hosting
+        // view is clear outside it), so the panel floats like a real popover.
+        menuBarPanel.hasShadow = true
         menuBarPanel.hidesOnDeactivate = false
         menuBarPanel.isExcludedFromWindowsMenu = true
         menuBarPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
