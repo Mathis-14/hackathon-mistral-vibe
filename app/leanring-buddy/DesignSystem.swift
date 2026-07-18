@@ -2,9 +2,10 @@
 //  DesignSystem.swift
 //  leanring-buddy
 //
-//  Centralized design system using a blue accent palette on dark surfaces,
-//  with a unified button style system. All colors, button styles, and
-//  interaction states are defined here as the single source of truth.
+//  Centralized design system using the Mistral orange accent palette on
+//  dark surfaces, with a unified button style system. All colors, button
+//  styles, and interaction states are defined here as the single source
+//  of truth. Token NAMES are stable API — only values change on re-theme.
 //
 
 import SwiftUI
@@ -25,81 +26,82 @@ enum DS {
         // Higher surfaces are lighter, creating a sense of depth.
 
         /// The deepest background — used for the main app window fill.
-        static let background = Color(hex: "#101211")
+        /// Anchored at Mistral dark #1A1A1A.
+        static let background = Color(hex: "#1A1A1A")
 
         /// First elevation layer — used for cards, sidebar, top bar backgrounds.
-        static let surface1 = Color(hex: "#171918")
+        static let surface1 = Color(hex: "#222222")
 
         /// Second elevation layer — used for input fields, elevated cards, chat bubbles.
-        static let surface2 = Color(hex: "#202221")
+        static let surface2 = Color(hex: "#2A2A2A")
 
         /// Third elevation layer — used for hover backgrounds on interactive elements.
-        static let surface3 = Color(hex: "#272A29")
+        static let surface3 = Color(hex: "#323232")
 
         /// Fourth elevation layer — used for active/pressed states on interactive elements.
-        static let surface4 = Color(hex: "#2E3130")
+        static let surface4 = Color(hex: "#3A3A3A")
 
         // ── Borders ──────────────────────────────────────────────────
 
         /// Subtle border — used for card outlines, dividers, input field borders.
-        static let borderSubtle = Color(hex: "#373B39")
+        static let borderSubtle = Color(hex: "#3D3D3D")
 
         /// Strong border — used for focused inputs, hovered card outlines.
-        static let borderStrong = Color(hex: "#444947")
+        static let borderStrong = Color(hex: "#4C4C4C")
 
         // ── Text ─────────────────────────────────────────────────────
 
-        /// Primary text — main body text, titles, headings.
-        static let textPrimary = Color(hex: "#ECEEED")
+        /// Primary text — main body text, titles, headings. Slightly warm white.
+        static let textPrimary = Color(hex: "#F0EEEB")
 
         /// Secondary text — descriptions, hints, muted labels.
-        static let textSecondary = Color(hex: "#ADB5B2")
+        static let textSecondary = Color(hex: "#B0ACA5")
 
         /// Tertiary text — very muted, used for section labels, timestamps, disabled text.
-        static let textTertiary = Color(hex: "#6B736F")
+        static let textTertiary = Color(hex: "#7A756D")
 
-        /// Text used on top of the accent fill (#2563eb blue), like the primary button label.
-        /// White on #2563eb achieves ~5.1:1 contrast — WCAG AA compliant.
-        /// White on #1d4ed8 hover achieves ~6.5:1 — also WCAG AA compliant.
-        static let textOnAccent: Color = .white
+        /// Text used on top of the accent fill (#FF7000 orange), like the primary button label.
+        /// Near-black on #FF7000 achieves ~7.5:1 contrast (white would only reach ~2.8:1),
+        /// matching Mistral's own black-on-orange brand treatment.
+        static let textOnAccent: Color = Color(hex: "#1F1300")
 
-        // ── Tailwind Blue Scale ─────────────────────────────────────
-        // Full Tailwind CSS v4 blue palette for consistent blue usage.
+        // ── Accent Scale (Mistral Orange) ───────────────────────────
+        // The token names keep the historical `blueN` spelling (stable API,
+        // used across views) but now carry the Mistral orange ramp.
         //
         // Usage guide:
         //   50–100  → Very subtle tinted backgrounds (selected rows, hover fills on dark surfaces)
         //   200–300 → Light text/icons on dark backgrounds, disabled states
-        //   400     → Bright accent text, links, icons, chat user bubbles
+        //   400     → Bright accent text, links, icons, hover fills
         //   500     → Mid-tone fills, badges, secondary buttons
-        //   600     → Primary action fills (buttons, toggles) — main accent
-        //   700     → Hover/pressed state for primary actions
+        //   600     → Primary action fills (buttons, toggles) — main accent #FF7000
+        //   700     → Pressed state for primary actions
         //   800–900 → Deep backgrounds, dark overlays, header bars
-        //   950     → Deepest blue — near-black tinted backgrounds
+        //   950     → Deepest orange — near-black tinted backgrounds
 
-        static let blue50  = Color(hex: "#eff6ff")
-        static let blue100 = Color(hex: "#dbeafe")
-        static let blue200 = Color(hex: "#bfdbfe")
-        static let blue300 = Color(hex: "#93c5fd")
-        static let blue400 = Color(hex: "#60a5fa")
-        static let blue500 = Color(hex: "#3b82f6")
-        static let blue600 = Color(hex: "#2563eb")
-        static let blue700 = Color(hex: "#1d4ed8")
-        static let blue800 = Color(hex: "#1e40af")
-        static let blue900 = Color(hex: "#1e3a8a")
-        static let blue950 = Color(hex: "#172554")
+        static let blue50  = Color(hex: "#FFF3E8")
+        static let blue100 = Color(hex: "#FFE3CC")
+        static let blue200 = Color(hex: "#FFC599")
+        static let blue300 = Color(hex: "#FFA75C")
+        static let blue400 = Color(hex: "#FF8A2E")
+        static let blue500 = Color(hex: "#FF7A14")
+        static let blue600 = Color(hex: "#FF7000")
+        static let blue700 = Color(hex: "#E06000")
+        static let blue800 = Color(hex: "#B54E00")
+        static let blue900 = Color(hex: "#8C3D00")
+        static let blue950 = Color(hex: "#4A2000")
 
-        // ── Accent (derived from blue scale) ───────────────────────
-        // The primary fill is Blue 600; hover darkens to Blue 700.
+        // ── Accent (derived from the orange scale) ─────────────────
+        // The primary fill is #FF7000; hover brightens, pressed darkens.
 
-        /// Accent fill — used for solid button backgrounds.
-        /// #2563eb → ~5.1:1 contrast with white text (WCAG AA).
+        /// Accent fill — used for solid button backgrounds. Mistral orange #FF7000.
         static let accent = blue600
 
-        /// Accent hover — slightly darker blue for hover state.
-        /// #1d4ed8 → ~6.5:1 contrast with white text (WCAG AA+).
-        static let accentHover = blue700
+        /// Accent hover — slightly brighter orange (#FF8A2E) so hover reads
+        /// as "lit up" on the dark surfaces.
+        static let accentHover = blue400
 
-        /// Accent text — bright blue used for accent-colored text and icons
+        /// Accent text — bright orange used for accent-colored text and icons
         /// on dark backgrounds (links, active nav items, highlighted labels).
         static let accentText = blue400
 
@@ -110,53 +112,53 @@ enum DS {
         // ── Semantic Colors ──────────────────────────────────────────
 
         /// Destructive/error actions — delete buttons, error messages, close button hover.
-        static let destructive = Color(hex: "#E5484D")        // Radix Red 9
+        /// macOS traffic-light red.
+        static let destructive = Color(hex: "#FF5F57")
 
         /// Destructive hover state.
-        static let destructiveHover = Color(hex: "#F2555A")   // Radix Red 10
+        static let destructiveHover = Color(hex: "#FF7169")
 
         /// Destructive used for text on dark backgrounds (brighter for readability).
-        static let destructiveText = Color(hex: "#FF6369")    // Radix Red 11
+        static let destructiveText = Color(hex: "#FF837C")
 
         /// Success — checkmarks, granted status, completion indicators.
-        /// Independent green so success states are visually distinct from the blue accent.
-        static let success = Color(hex: "#34D399")      // Tailwind Emerald 400
+        /// Apple system green so success states are visually distinct from the orange accent.
+        static let success = Color(hex: "#34C759")
 
         /// Warning — caution messages, manual verification failure explanations.
-        static let warning = Color(hex: "#FFB224")            // Radix Amber 9
+        static let warning = Color(hex: "#FFB340")
 
         /// Warning text — brighter variant for text on dark backgrounds.
-        static let warningText = Color(hex: "#F1A10D")        // Radix Amber 11
+        static let warningText = Color(hex: "#FFC266")
 
         /// Info/feature highlight — used for prompt card headers, code highlights.
         /// Lighter than accentText so informational elements are visually distinct
         /// from interactive accent-colored elements.
-        static let info = Color(hex: "#70B8FF")               // Radix Blue 9
+        static let info = Color(hex: "#FFC08A")
 
-        /// Inline code text color — slightly brighter blue for monospace code snippets.
-        static let codeText = Color(hex: "#9DC2FF")           // Radix Blue 11 variant
+        /// Inline code text color — light peach for monospace code snippets.
+        static let codeText = Color(hex: "#FFD9B8")
 
         // ── Overlay Cursor ───────────────────────────────────────────
 
-        /// The blue cursor/bubble color used in OverlayWindow.
-        /// Kept distinct from the accent since it serves a different purpose
-        /// (screen overlay vs in-app UI).
-        static let overlayCursorBlue = Color(hex: "#3380FF")
+        /// The cursor/bubble color used in OverlayWindow — Mistral orange so
+        /// every on-screen action trace carries the brand.
+        static let overlayCursorBlue = Color(hex: "#FF7000")
 
         // ── Floating Button Gradient ─────────────────────────────────
 
-        /// The floating session button gradient colors (unchanged from original —
-        /// this gradient is intentionally distinct from the rest of the palette
-        /// to make the floating button stand out as a "jewel" on the desktop).
-        static let floatingGradientPurple = Color(hex: "#8F46EB")
-        static let floatingGradientPink = Color(hex: "#E84D9E")
-        static let floatingGradientOrange = Color(hex: "#FF8C33")
+        /// The floating session button gradient colors — re-themed to the
+        /// Mistral flag sunset (red → vermilion → orange) so the floating
+        /// button reads as a Mistral "jewel" on the desktop.
+        static let floatingGradientPurple = Color(hex: "#E10500")
+        static let floatingGradientPink = Color(hex: "#FA500F")
+        static let floatingGradientOrange = Color(hex: "#FF8205")
 
         // ── Help Chat ──────────────────────────────────────────────
 
         /// User message bubble background in the help chat.
-        /// Blue 800 — deep blue that's clearly distinct from the dark surface
-        /// while keeping white text highly readable (~9:1 contrast).
+        /// Deep orange (scale 800) — clearly distinct from the dark surface
+        /// while keeping white text readable (~5:1 contrast).
         static let helpChatUserBubble = blue800
 
         /// Slightly lighter variant for hover/pressed states on user bubbles.
@@ -321,8 +323,8 @@ struct DSPrimaryButtonStyle: ButtonStyle {
 
     private func buttonBackgroundColor(isPressed: Bool) -> Color {
         if isPressed {
-            // Pressed: brighten slightly beyond hover
-            return DS.Colors.accentHover.blendedWithWhite(fraction: DS.StateLayer.pressed)
+            // Pressed: darken to the deep orange (#E06000) for tactile feedback
+            return DS.Colors.blue700
         } else if isHovered {
             return DS.Colors.accentHover
         } else {
@@ -750,9 +752,9 @@ extension View {
 // MARK: - Buddy Composer Visual Style
 
 enum BuddyComposerVisualStyle {
-    static let waveformLeadingColor = Color(hex: "#F3FBFF")
-    static let waveformTrailingColor = Color(hex: "#8FD2FF")
-    static let waveformGlowColor = Color(hex: "#AEE3FF")
+    static let waveformLeadingColor = Color(hex: "#FFF7EF")
+    static let waveformTrailingColor = Color(hex: "#FFC08A")
+    static let waveformGlowColor = Color(hex: "#FFDDBE")
 }
 
 // MARK: - Pointer Cursor (AppKit Bridge)
