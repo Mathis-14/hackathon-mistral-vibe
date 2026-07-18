@@ -1,1 +1,3 @@
 app/wakeword/.venv/
+.DS_Store
+app/leanring-buddy.xcodeproj/project.xcworkspace/xcuserdata/
