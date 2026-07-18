@@ -121,8 +121,13 @@ private final class VoxtralTranscriptionSession: BuddyStreamingTranscriptionSess
             self.hasRequestedFinalTranscript = true
 
             let bufferedPCM16AudioData = self.bufferedPCM16AudioData
-            self.transcriptionUploadTask = Task { [weak self] in
-                await self?.transcribeBufferedAudio(bufferedPCM16AudioData)
+            // Strong capture ON PURPOSE: the dictation manager releases the
+            // session right after stop, so this task is what keeps the
+            // session alive until the upload delivers the transcript (the
+            // weak-capture version deallocated mid-flight and the panel hung
+            // on "Transcribing…" forever). The task ends, the cycle breaks.
+            self.transcriptionUploadTask = Task {
+                await self.transcribeBufferedAudio(bufferedPCM16AudioData)
             }
         }
     }
@@ -228,7 +233,11 @@ private final class VoxtralTranscriptionSession: BuddyStreamingTranscriptionSess
     }
 
     deinit {
-        cancel()
+        // No cancel() here: dispatching a self-capturing block from deinit is
+        // the "dangling reference" runtime warning. By deinit time the upload
+        // task has either finished (it retains self) or was cancelled
+        // explicitly by the dictation manager.
+        urlSession.invalidateAndCancel()
     }
 }
 
