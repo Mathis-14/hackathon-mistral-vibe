@@ -267,7 +267,12 @@ struct VibeBuddyPanelContainer: View {
             )
         }
         if isShowingRoutines {
-            return AnyView(RoutinesView(store: routineStore, scheduler: routineScheduler))
+            return AnyView(VStack(spacing: 10) {
+                PermissionsGlanceView(companionManager: permissionsSource)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                RoutinesView(store: routineStore, scheduler: routineScheduler)
+            })
         }
         return nil
     }

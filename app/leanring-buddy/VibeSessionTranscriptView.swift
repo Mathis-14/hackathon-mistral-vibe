@@ -184,6 +184,7 @@ struct VibeSessionTranscriptView: View {
     let session: VibeSession
     /// Clears the selection in the panel container (back chevron).
     let onBack: () -> Void
+    @State private var isTeleporting = false
 
     /// Directory currently rendered — retargets to the resume-created
     /// directory after a steer.
@@ -273,9 +274,38 @@ struct VibeSessionTranscriptView: View {
 
             Spacer(minLength: 0)
 
-            Image(systemName: "terminal")
-                .font(.system(size: 11))
-                .foregroundColor(DS.Colors.textTertiary)
+            Button {
+                isTeleporting = true
+                ActuationOverlay.shared.showTrace(appName: "Vibe Work")
+                VibeWorkTeleporter.teleportAndOpen(
+                    prompt: "Continue this session in the cloud: \(session.title)",
+                    projectDirectory: session.workingDirectory,
+                    onFailure: { failure in
+                        isTeleporting = false
+                        BuddySoundEffects.playHiss()
+                        print("☁️ Vibe Work teleport failed: \(failure.message)")
+                    }
+                )
+                // Success opens the browser; reset the spinner either way
+                // after the watchdog window.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                    isTeleporting = false
+                }
+            } label: {
+                if isTeleporting {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 24, height: 24)
+                } else {
+                    Image(systemName: "icloud.and.arrow.up")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textSecondary)
+                        .frame(width: 24, height: 24)
+                        .background(DS.Colors.surface2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+            }
+            .buttonStyle(.plain)
+            .help("Hand this project off to Vibe Work (cloud)")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
