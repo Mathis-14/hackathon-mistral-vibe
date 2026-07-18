@@ -128,6 +128,9 @@ final class WorkerChatClient {
     ///
     /// - Parameters:
     ///   - messages: full conversation, oldest first; roles are "user"/"assistant"/"system".
+    ///   - screenshotBase64: raw base64 JPEG (no data-URI prefix) of the user's
+    ///     frontmost display, or nil — sent as the `screenshot_base64` JSON field
+    ///     (`null` when nil). See app/CHAT_CONTRACT.md.
     ///   - onDelta: called on the main actor with each NEW text fragment (not the
     ///     accumulated text), in arrival order — append it to what the UI shows.
     /// - Returns: the full accumulated reply text once the stream completes.
@@ -136,18 +139,25 @@ final class WorkerChatClient {
     ///   a retry after partial delivery would duplicate text in the UI).
     func streamReply(
         messages: [(role: String, content: String)],
+        screenshotBase64: String? = nil,
         onDelta: @escaping @MainActor (String) -> Void
     ) async throws -> String {
         let progress = StreamProgress()
         do {
-            return try await performStreamingRequest(messages: messages, onDelta: onDelta, progress: progress)
+            return try await performStreamingRequest(
+                messages: messages, screenshotBase64: screenshotBase64,
+                onDelta: onDelta, progress: progress
+            )
         } catch let error as URLError where Self.isConnectionFailure(error) {
             guard !progress.receivedAnyDelta else {
                 throw WorkerChatError.connectionFailed(underlying: error)
             }
             // Exactly one retry, then a typed error.
             do {
-                return try await performStreamingRequest(messages: messages, onDelta: onDelta, progress: progress)
+                return try await performStreamingRequest(
+                    messages: messages, screenshotBase64: screenshotBase64,
+                    onDelta: onDelta, progress: progress
+                )
             } catch let retryError as URLError {
                 throw WorkerChatError.connectionFailed(underlying: retryError)
             }
@@ -163,6 +173,7 @@ final class WorkerChatClient {
 
     private func performStreamingRequest(
         messages: [(role: String, content: String)],
+        screenshotBase64: String?,
         onDelta: @escaping @MainActor (String) -> Void,
         progress: StreamProgress
     ) async throws -> String {
@@ -172,10 +183,10 @@ final class WorkerChatClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
 
-        // v0 contract: screenshot field always present and always null (decision D007).
+        // Contract: screenshot_base64 always present — raw base64 JPEG or null (v1, D007).
         let body: [String: Any] = [
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
-            "screenshot_base64": NSNull()
+            "screenshot_base64": screenshotBase64.map { $0 as Any } ?? (NSNull() as Any)
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
