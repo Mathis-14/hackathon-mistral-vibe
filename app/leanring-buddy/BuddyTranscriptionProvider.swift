@@ -30,17 +30,16 @@ protocol BuddyTranscriptionProvider {
 }
 
 enum BuddyTranscriptionProviderFactory {
-    // Voxtral through the local worker (/transcribe) is the primary backend —
-    // keys live worker-side only (MUST #5, D018). Apple Speech stays as the
-    // zero-config on-device fallback so push-to-talk always works even when
-    // wrangler dev is down.
+    // Voxtral through the worker /transcribe route is the primary backend
+    // (MUST #7); Apple Speech remains the zero-config on-device fallback,
+    // forced with `defaults write com.vibebuddy.app vibebuddy.stt apple`.
     static func makeDefaultProvider() -> any BuddyTranscriptionProvider {
-        let voxtralProvider = WorkerTranscriptionProvider()
+        let voxtralProvider = VoxtralTranscriptionProvider()
         if voxtralProvider.isConfigured {
-            print("🎙️ Transcription: using \(voxtralProvider.displayName) via worker /transcribe")
+            print("🎙️ Transcription: using \(voxtralProvider.displayName) via \(VoxtralTranscriptionProvider.transcribeURL)")
             return voxtralProvider
         }
-        print("⚠️ Transcription: worker unavailable, falling back to Apple Speech")
+        print("⚠️ Transcription: Voxtral disabled — falling back to Apple Speech")
         return AppleSpeechTranscriptionProvider()
     }
 }

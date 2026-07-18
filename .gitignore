@@ -5,3 +5,4 @@ node_modules/
 .DS_Store
 app/wakeword/.venv/
 app/leanring-buddy.xcodeproj/project.xcworkspace/xcuserdata/
+dist/

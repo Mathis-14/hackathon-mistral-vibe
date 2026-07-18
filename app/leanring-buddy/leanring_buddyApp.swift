@@ -7,6 +7,7 @@
 //  opens a floating panel with companion voice controls.
 //
 
+import Combine
 import ServiceManagement
 import SwiftUI
 import Sparkle
@@ -33,9 +34,26 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     private var globalSummonHotkeyMonitor: GlobalSummonHotkeyMonitor?
     private let wakeWordSidecarMonitor = WakeWordSidecarMonitor()
     private let companionManager = CompanionManager()
+    private var catOverlayCancellable: AnyCancellable?
     private var sparkleUpdaterController: SPUStandardUpdaterController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Single-instance guard: launching a second copy (Xcode + the
+        // ~/Applications build, typically) just fronts the first one.
+        // Skipped under XCTest: the test host must boot while the real app
+        // is running, or every test run aborts with an early exit.
+        let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let runningCopies = isRunningTests ? [] : NSRunningApplication.runningApplications(
+            withBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.vibebuddy.app"
+        )
+        if runningCopies.count > 1 {
+            print("🎯 Vibe Buddy: another instance is already running — quitting this one")
+            runningCopies.first { $0 != NSRunningApplication.current }?
+                .activate(options: [])
+            NSApp.terminate(nil)
+            return
+        }
+
         print("🎯 Clicky: Starting...")
         print("🎯 Clicky: Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")")
 
@@ -71,6 +89,27 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
             self?.menuBarPanelManager?.showPanel()
         }
         wakeWordSidecarMonitor.startIfAvailable()
+
+        // The cat companion patrols the screen corner whenever the app is
+        // actually doing something: mic open, Voxtral transcribing, or a
+        // Mistral reply streaming. Visible feedback for every voice command.
+        if let chatController = menuBarPanelManager?.chatController {
+            catOverlayCancellable = companionManager.$voiceState
+                .combineLatest(chatController.$isStreaming)
+                .receive(on: DispatchQueue.main)
+                .sink { voiceState, isStreaming in
+                    switch (voiceState, isStreaming) {
+                    case (.listening, _):
+                        CatCompanionOverlay.shared.show("Listening…")
+                    case (.processing, _):
+                        CatCompanionOverlay.shared.show("Transcribing with Voxtral…")
+                    case (_, true):
+                        CatCompanionOverlay.shared.show("Thinking…")
+                    default:
+                        CatCompanionOverlay.shared.hide()
+                    }
+                }
+        }
 
         companionManager.start()
         // Auto-open the panel if the user still needs to do something:

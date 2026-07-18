@@ -70,13 +70,22 @@ struct SSEEventParser {
         }
 
         switch type {
+        // Canonical worker shape (worker/CONTRACT.md, Anthropic-style framing).
+        case "content_block_delta":
+            guard let delta = json["delta"] as? [String: Any],
+                  (delta["type"] as? String) == "text_delta",
+                  let text = delta["text"] as? String else { return nil }
+            return .delta(text)
+        case "message_stop":
+            return .done
+        // Legacy draft shape — kept so older fixtures/mocks still parse.
         case "delta":
             guard let text = json["text"] as? String else { return nil }
             return .delta(text)
         case "done":
             return .done
         default:
-            return nil // Unknown event types are forward-compatible no-ops.
+            return nil // Framing events and unknown types are no-ops.
         }
     }
 }
@@ -183,10 +192,25 @@ final class WorkerChatClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
 
-        // Contract: screenshot_base64 always present — raw base64 JPEG or null (v1, D007).
+        // Canonical request shape (worker/CONTRACT.md): Anthropic-style body;
+        // the screenshot rides as an image content block on the last user
+        // message. The worker ignores `model` and owns the real model choice.
+        var payloadMessages: [[String: Any]] = messages.map { ["role": $0.role, "content": $0.content] }
+        if let screenshotBase64,
+           let lastUserIndex = payloadMessages.lastIndex(where: { ($0["role"] as? String) == "user" }) {
+            let questionText = payloadMessages[lastUserIndex]["content"] as? String ?? ""
+            payloadMessages[lastUserIndex]["content"] = [
+                ["type": "image", "source": [
+                    "type": "base64", "media_type": "image/jpeg", "data": screenshotBase64,
+                ]],
+                ["type": "text", "text": questionText],
+            ]
+        }
         let body: [String: Any] = [
-            "messages": messages.map { ["role": $0.role, "content": $0.content] },
-            "screenshot_base64": screenshotBase64.map { $0 as Any } ?? (NSNull() as Any)
+            "model": "vibe-buddy-app",
+            "max_tokens": 1024,
+            "stream": true,
+            "messages": payloadMessages,
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
