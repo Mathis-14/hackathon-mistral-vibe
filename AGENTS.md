@@ -6,7 +6,7 @@ macOS menu-bar-only companion for Mistral: a global fn+control hotkey summons a 
 
 In plan mode, run `/iterate-q` before locking the plan.
 
-This file is the engineering source of truth: read it before any task, update it in the same change when a durable decision or constraint appears. When the plan changes, this file changes.
+This file is the engineering source of truth: read it before any task, update it in the same change when a durable decision or constraint appears. When the plan changes, this file changes. Fresh session? `docs/CONTEXT.md` is the dated state snapshot (what's built, verified, uncommitted, next).
 
 ## Core flow (what the code implements)
 
@@ -62,8 +62,11 @@ scripts/      # smoke.sh
 
 ## External APIs — verified facts (checked 2026-07-18)
 
-- FILL HOUR 1 FROM THE DOCS, NOT MEMORY — record here: exact Mistral Medium 3.5 model id + vision support, image-input format (base64 data URI vs URL), streaming SSE event shape, auth header, rate limits on hackathon credits. Docs: https://docs.mistral.ai
-- Voxtral STT (CORE): `POST https://api.mistral.ai/v1/audio/transcriptions`, model `voxtral-mini-latest`, multipart — same shape as the scaffold's OpenAI STT provider (verify hour 1). Docs: https://docs.mistral.ai
+- Chat model id: **`mistral-medium-3-5`** (verified live against `GET /v1/models` 2026-07-18; dated form `mistral-medium-2604`; the docs model-card id `mistral-medium-3-5-26-04` is REJECTED by the API — 400 invalid_model). Vision + function calling, 256k context.
+- Chat: `POST https://api.mistral.ai/v1/chat/completions`, `Authorization: Bearer`, `stream:true` → OpenAI-style chunks (`choices[0].delta.content`) ending `data: [DONE]`. Image = content part `{type:"image_url", image_url:"data:image/jpeg;base64,..."}` (string form), max 8 images/request. All verified live.
+- Streamed `tool_calls` (upgrade path only): Mistral emits ONE chunk with complete `arguments` JSON string + `finish_reason:"tool_calls"` — not fragmented like OpenAI (verified live 2026-07-18).
+- Voxtral STT: `POST /v1/audio/transcriptions`, multipart (`file` 16kHz mono WAV, `model=voxtral-mini-latest`), returns `{text, ...}`. Verified live via worker `/transcribe`.
+- Prompt-driven actuation reliability (Medium 3.5): 10/10 correct trailing `[OPEN_APP:]`/`[OPEN_URL:]` tokens incl. French, 0/2 false positives — no function-calling upgrade needed.
 - macOS facts: modifier-only hotkey needs the Accessibility permission; ScreenCaptureKit needs Screen Recording; both prompts reappear when the build signature changes.
 
 ## Build order
@@ -121,6 +124,10 @@ Never fire a live routine on stage — the routine result and its alert are pre-
 - D009 — Split: Edouard owns ALL of `app/` (Swift engine + UI); Mathis owns `worker/` agentic layer + `fixtures/` + landing page/.dmg (built on his second Mac) + PRODUCT/demo. Why: nobody shares an Xcode target; Mathis's tracks ship independently.
 - D010 — Landing page + signed .dmg are IN as a Mathis parallel track that never gates the live demo. Why: product-feel win judges reward; notarization delays must not threaten 21:00.
 - D011 — Feature freeze 19:30, then fixtures/backup video + rehearse ×2 (once from the .dmg install if it exists); demo ~21:00. Why: adopted from Edouard's plan, shifted to the real event schedule.
+- D012 — Inbound worker contract is byte-compatible with the scaffold's Swift client (Anthropic-shaped request, `content_block_delta` SSE); upstream is Mistral only. Why: Edouard's `ClaudeAPI.swift` works unchanged — see `worker/CONTRACT.md`.
+- D013 — Action set = `[OPEN_APP:]` + `[OPEN_URL:]`, prompt-driven (no function calling). Why: user chose the set; live test showed 10/10 token reliability and 0 false positives, so the simpler path won; tool-calls upgrade documented (single-chunk delta, verified) if ever needed.
+- D014 — Chat model id = `mistral-medium-3-5` set in wrangler.toml. Why: the docs-card id `mistral-medium-3-5-26-04` is rejected by the API; id verified against `GET /v1/models`.
+- D015 — `DEMO_MODE` is overridable per-request via `x-demo-mode` header. Why: lets smoke test live against an already-running replay worker without restarting it; `x-vibe-source` response header exposes silent fixture fallbacks.
 
 ## Demo checklist (run before the demo)
 

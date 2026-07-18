@@ -1,0 +1,4 @@
+# Copy to worker/.dev.vars (gitignored). The ONLY place any key lives.
+MISTRAL_API_KEY=your-mistral-api-key
+# Optional override; unset = replay (demo-safe fixtures, no network)
+# DEMO_MODE=live
