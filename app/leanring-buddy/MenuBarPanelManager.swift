@@ -37,11 +37,19 @@ final class MenuBarPanelManager: NSObject {
     /// so the push-to-talk transcript can be routed into the same pipeline
     /// as typed input (v1 wiring).
     let chatController = VibeBuddyChatController()
+
+    /// Routines live as long as the panel manager: the scheduler keeps
+    /// ticking (and posting native alerts) even while the panel is closed.
+    let routineStore: RoutineStore
+    let routineScheduler: RoutineScheduler
     private let panelWidth: CGFloat = VibeBuddyPanelView.preferredSize.width
     private let panelHeight: CGFloat = VibeBuddyPanelView.preferredSize.height
 
     init(companionManager: CompanionManager) {
         self.companionManager = companionManager
+        let store = RoutineStore()
+        self.routineStore = store
+        self.routineScheduler = RoutineScheduler(store: store)
         super.init()
         createStatusItem()
 
@@ -121,7 +129,11 @@ final class MenuBarPanelManager: NSObject {
     }
 
     private func createPanel() {
-        let vibeBuddyPanelView = VibeBuddyPanelContainer(controller: chatController)
+        let vibeBuddyPanelView = VibeBuddyPanelContainer(
+            controller: chatController,
+            routineStore: routineStore,
+            routineScheduler: routineScheduler
+        )
 
         let hostingView = NSHostingView(rootView: vibeBuddyPanelView)
         hostingView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)

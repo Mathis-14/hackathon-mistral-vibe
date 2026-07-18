@@ -47,23 +47,43 @@ final class VibeBuddyChatController: ObservableObject {
             let screenshotBase64 = await captureFrontmostScreenshotBase64()
 
             var assistantMessageId: UUID?
+            // Every stream token goes through this single parser before
+            // anything is displayed or acted on; [OPEN_APP:] actuation always
+            // draws its overlay trace, even when the open fails (MUST #6).
+            var actuationParser = ActuationTokenParser()
+
+            @MainActor func appendToAssistantMessage(_ text: String) {
+                guard !text.isEmpty else { return }
+                if let id = assistantMessageId,
+                   let index = messages.firstIndex(where: { $0.id == id }) {
+                    messages[index].text += text
+                } else {
+                    let message = ChatMessage(id: UUID(), role: .assistant, text: text)
+                    assistantMessageId = message.id
+                    messages.append(message)
+                }
+            }
+
+            @MainActor func actuate(_ appNames: [String]) {
+                for appName in appNames {
+                    ActuationOverlay.shared.showTrace(appName: appName)
+                    ActuationExecutor.openApp(named: appName)
+                }
+            }
+
             do {
                 let result = try await WorkerChatReplay.streamReply(
                     messages: history,
                     screenshotBase64: screenshotBase64
-                ) { [weak self] delta in
-                    guard let self else { return }
-                    if let id = assistantMessageId,
-                       let index = self.messages.firstIndex(where: { $0.id == id }) {
-                        self.messages[index].text += delta
-                    } else {
-                        let message = ChatMessage(id: UUID(), role: .assistant, text: delta)
-                        assistantMessageId = message.id
-                        self.messages.append(message)
-                    }
+                ) { delta in
+                    let (displayText, appNames) = actuationParser.feed(delta: delta)
+                    appendToAssistantMessage(displayText)
+                    actuate(appNames)
                 }
+                appendToAssistantMessage(actuationParser.flush())
                 lastReplyWasReplayed = result.isReplayed
             } catch {
+                appendToAssistantMessage(actuationParser.flush())
                 let explanation = "I couldn't reach the worker (\(error.localizedDescription)). Check that wrangler dev is running on 127.0.0.1:8787, or set chat mode to replay."
                 messages.append(ChatMessage(id: UUID(), role: .assistant, text: explanation))
             }
@@ -100,15 +120,43 @@ final class VibeBuddyChatController: ObservableObject {
 }
 
 /// Bridges the observable controller to the closure-driven panel view so
-/// MenuBarPanelManager can host a plain NSHostingView.
+/// MenuBarPanelManager can host a plain NSHostingView. Also owns the
+/// chat/routines tab switch.
 struct VibeBuddyPanelContainer: View {
     @ObservedObject var controller: VibeBuddyChatController
+    @ObservedObject var routineStore: RoutineStore
+    let routineScheduler: RoutineScheduler
+    @State private var isShowingRoutines = false
 
     var body: some View {
         VibeBuddyPanelView(
             messages: controller.messages,
             isStreaming: controller.isStreaming,
-            onSubmit: { [weak controller] text in controller?.submit(text) }
+            onSubmit: { [weak controller] text in controller?.submit(text) },
+            headerAccessory: AnyView(routinesToggleButton),
+            overrideContent: isShowingRoutines
+                ? AnyView(RoutinesView(store: routineStore, scheduler: routineScheduler))
+                : nil
         )
+    }
+
+    private var routinesToggleButton: some View {
+        Button {
+            isShowingRoutines.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isShowingRoutines ? "bubble.left.fill" : "clock.arrow.2.circlepath")
+                    .font(.system(size: 12, weight: .semibold))
+                if !isShowingRoutines {
+                    RoutinesBadge(store: routineStore)
+                }
+            }
+            .foregroundStyle(DS.Colors.textSecondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(DS.Colors.surface2, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(isShowingRoutines ? "Back to chat" : "Routines")
     }
 }
