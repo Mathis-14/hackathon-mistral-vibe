@@ -29,8 +29,8 @@ enum DS {
         // warmer/darker so hover and press still read on white.
 
         /// The deepest background — used for the main app window fill.
-        /// Warm near-white, like chat.mistral.ai.
-        static let background = Color(hex: "#FAFAF8")
+        /// Warm near-white, verified from mistral.ai's live CSS (D013).
+        static let background = Color(hex: "#FBFBF8")
 
         /// First elevation layer — used for cards, sidebar, top bar backgrounds.
         static let surface1 = Color(hex: "#F4F2EE")
@@ -47,15 +47,16 @@ enum DS {
         // ── Borders ──────────────────────────────────────────────────
 
         /// Subtle border — used for card outlines, dividers, input field borders.
-        static let borderSubtle = Color(hex: "#E5E1DA")
+        static let borderSubtle = Color(hex: "#E4E3DE")
 
         /// Strong border — used for focused inputs, hovered card outlines.
         static let borderStrong = Color(hex: "#CFC9C0")
 
         // ── Text ─────────────────────────────────────────────────────
 
-        /// Primary text — main body text, titles, headings. Mistral near-black.
-        static let textPrimary = Color(hex: "#1A1A1A")
+        /// Primary text — main body text, titles, headings. Mistral navy
+        /// ink (#151524, verified from the live site — not pure black).
+        static let textPrimary = Color(hex: "#151524")
 
         /// Secondary text — descriptions, hints, muted labels.
         static let textSecondary = Color(hex: "#6E6963")
@@ -82,14 +83,14 @@ enum DS {
         //   800–900 → Deep backgrounds, dark overlays, header bars
         //   950     → Deepest orange — near-black tinted backgrounds
 
-        static let blue50  = Color(hex: "#FFF3E8")
+        static let blue50  = Color(hex: "#FFF0EB")
         static let blue100 = Color(hex: "#FFE3CC")
-        static let blue200 = Color(hex: "#FFC599")
+        static let blue200 = Color(hex: "#FFB598")
         static let blue300 = Color(hex: "#FFA75C")
-        static let blue400 = Color(hex: "#FF8A2E")
-        static let blue500 = Color(hex: "#FF7A14")
-        static let blue600 = Color(hex: "#FF7000")
-        static let blue700 = Color(hex: "#E06000")
+        static let blue400 = Color(hex: "#FF6529")
+        static let blue500 = Color(hex: "#FF5229")
+        static let blue600 = Color(hex: "#FA500F")
+        static let blue700 = Color(hex: "#DD4708")
         static let blue800 = Color(hex: "#B54E00")
         static let blue900 = Color(hex: "#8C3D00")
         static let blue950 = Color(hex: "#4A2000")
@@ -147,7 +148,7 @@ enum DS {
 
         /// The cursor/bubble color used in OverlayWindow — Mistral orange so
         /// every on-screen action trace carries the brand.
-        static let overlayCursorBlue = Color(hex: "#FF7000")
+        static let overlayCursorBlue = Color(hex: "#FA500F")
 
         // ── Floating Button Gradient ─────────────────────────────────
 

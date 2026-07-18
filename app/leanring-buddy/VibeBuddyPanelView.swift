@@ -42,8 +42,13 @@ struct VibeBuddyPanelView: View {
     let messages: [ChatMessage]
     /// True while the assistant reply is streaming in. The last assistant
     /// bubble shows an animated caret; if no assistant bubble exists yet,
-    /// a "thinking" bubble with the caret is shown instead.
+    /// a "thinking" indicator is shown instead.
     let isStreaming: Bool
+    /// True when the current stream came from voice: the thinking indicator
+    /// stays the caret bubble (the on-screen cat overlay already animates);
+    /// typed chat shows the in-panel walking-cat instead. Defaulted so all
+    /// existing call sites keep compiling.
+    var isVoiceStream: Bool = false
     /// Called with the trimmed input text when the user presses Return
     /// or clicks send. The view clears its own input field.
     let onSubmit: (String) -> Void
@@ -110,17 +115,16 @@ struct VibeBuddyPanelView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            VibeBuddyStatusDot(isStreaming: isStreaming)
+            // The lying-down "Le Chat" mascot. Its square canvas is mostly
+            // transparent padding, so it renders at 52pt while occupying a
+            // 32x24 layout slot — the overflow is empty pixels.
+            AnimatedGIFView(resourceName: "lechat-gif")
+                .frame(width: 52, height: 52)
+                .frame(width: 32, height: 24)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Vibe Buddy")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DS.Colors.textPrimary)
-
-                Text("Mistral, one keystroke away")
-                    .font(.system(size: 11))
-                    .foregroundColor(DS.Colors.textTertiary)
-            }
+            Text("Vibe Buddy")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(DS.Colors.textPrimary)
 
             Spacer()
 
@@ -157,9 +161,15 @@ struct VibeBuddyPanelView: View {
                         }
 
                         // The reply is on its way but no assistant text has
-                        // arrived yet — show a lone thinking caret bubble.
+                        // arrived yet. Typed chat gets the walking-cat
+                        // indicator; voice keeps the caret bubble since the
+                        // on-screen cat overlay is already animating.
                         if isStreaming && messages.last?.role != .assistant {
-                            VibeBuddyThinkingBubble()
+                            if isVoiceStream {
+                                VibeBuddyThinkingBubble()
+                            } else {
+                                VibeBuddyThinkingCat()
+                            }
                         }
 
                         Color.clear
