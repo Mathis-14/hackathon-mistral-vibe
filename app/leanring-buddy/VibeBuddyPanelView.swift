@@ -205,7 +205,7 @@ struct VibeBuddyPanelView: View {
         onSubmit: { print("submit: \($0)") }
     )
     .padding(40)
-    .background(Color(hex: "#0D0D0D"))
+    .background(Color(hex: "#D8D4CD"))
 }
 
 #Preview("Mid-stream") {
@@ -227,7 +227,7 @@ struct VibeBuddyPanelView: View {
         onSubmit: { print("submit: \($0)") }
     )
     .padding(40)
-    .background(Color(hex: "#0D0D0D"))
+    .background(Color(hex: "#D8D4CD"))
 }
 
 #Preview("Override content (routines tab)") {
@@ -254,7 +254,7 @@ struct VibeBuddyPanelView: View {
         )
     )
     .padding(40)
-    .background(Color(hex: "#0D0D0D"))
+    .background(Color(hex: "#D8D4CD"))
 }
 
 #Preview("Long conversation") {
@@ -283,5 +283,5 @@ struct VibeBuddyPanelView: View {
         onSubmit: { print("submit: \($0)") }
     )
     .padding(40)
-    .background(Color(hex: "#0D0D0D"))
+    .background(Color(hex: "#D8D4CD"))
 }
