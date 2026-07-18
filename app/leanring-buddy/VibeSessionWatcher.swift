@@ -15,6 +15,7 @@
 
 import Combine
 import Foundation
+import UserNotifications
 
 struct VibeSession: Identifiable, Equatable {
     /// Session directory name, e.g. "session_20260718_094422_7098a039".
@@ -41,6 +42,12 @@ final class VibeSessionWatcher: ObservableObject {
     private let recentWindow: TimeInterval = 30 * 60
     private let maxSessions = 4
     private var timer: Timer?
+
+    /// Session ids seen active on the previous tick — an id leaving this set
+    /// means the agent just finished, which triggers the meow notification.
+    private var previouslyActiveIds: Set<String> = []
+    private var hasBaselineRefresh = false
+    private var didRequestNotificationAuthorization = false
 
     private let sessionsDirectory = FileManager.default
         .homeDirectoryForCurrentUser
@@ -101,6 +108,42 @@ final class VibeSessionWatcher: ObservableObject {
         let capped = Array(parsed.prefix(maxSessions))
         if capped != sessions {
             sessions = capped
+        }
+
+        notifyCompletions(in: parsed)
+    }
+
+    /// Meows once per agent that just went from working to done — the cat
+    /// tells you your Vibe Code agent finished. Baseline tick is silent so
+    /// launching the app never replays history.
+    private func notifyCompletions(in parsed: [VibeSession]) {
+        let activeIds = Set(parsed.filter(\.isActive).map(\.id))
+        defer {
+            previouslyActiveIds = activeIds
+            hasBaselineRefresh = true
+        }
+        guard hasBaselineRefresh else { return }
+
+        let justFinishedIds = previouslyActiveIds.subtracting(activeIds)
+        guard !justFinishedIds.isEmpty else { return }
+
+        if !didRequestNotificationAuthorization {
+            didRequestNotificationAuthorization = true
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        }
+
+        for finishedId in justFinishedIds {
+            guard let session = parsed.first(where: { $0.id == finishedId }) else { continue }
+            let content = UNMutableNotificationContent()
+            content.title = "🐱 Vibe Code agent finished"
+            content.body = "\(session.title) — \(String(format: "$%.2f", session.costUsd)) · \(session.projectName)"
+            content.sound = UNNotificationSound(named: UNNotificationSoundName("meow.wav"))
+            UNUserNotificationCenter.current().add(UNNotificationRequest(
+                identifier: "vibebuddy.session.\(finishedId)",
+                content: content,
+                trigger: nil
+            ))
+            print("🐱 Meow — agent done: \(session.title)")
         }
     }
 
