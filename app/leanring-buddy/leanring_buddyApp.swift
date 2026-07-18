@@ -68,9 +68,11 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
         // transcript opens the panel and submits through the chat controller,
         // so the exchange is always visible on screen (PRODUCT.md MUST #6).
         companionManager.onTranscriptReady = { [weak self] transcript in
-            guard let panelManager = self?.menuBarPanelManager else { return }
+            let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Empty transcript = a wake capture that heard nothing — drop it.
+            guard !trimmed.isEmpty, let panelManager = self?.menuBarPanelManager else { return }
             panelManager.showPanel()
-            panelManager.chatController.submit(transcript)
+            panelManager.chatController.submit(trimmed)
         }
         print("🎙️ Vibe Buddy: transcript hook installed — push-to-talk routes into the chat panel")
 
@@ -86,7 +88,11 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
         // « Hey Vibe » wake word (v2 stretch): optional Python sidecar; the
         // app works fully without it. Summons the panel like the hotkey.
         wakeWordSidecarMonitor.onWake = { [weak self] in
-            self?.menuBarPanelManager?.showPanel()
+            guard let self else { return }
+            // « Hey Vibe, … » — the panel slides in AND the mic opens: what
+            // you say next is the command (silence closes the window).
+            self.menuBarPanelManager?.showPanel()
+            self.companionManager.beginWakeTriggeredCapture()
         }
         wakeWordSidecarMonitor.startIfAvailable()
 
