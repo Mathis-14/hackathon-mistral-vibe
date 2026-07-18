@@ -40,7 +40,10 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Single-instance guard: launching a second copy (Xcode + the
         // ~/Applications build, typically) just fronts the first one.
-        let runningCopies = NSRunningApplication.runningApplications(
+        // Skipped under XCTest: the test host must boot while the real app
+        // is running, or every test run aborts with an early exit.
+        let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let runningCopies = isRunningTests ? [] : NSRunningApplication.runningApplications(
             withBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.vibebuddy.app"
         )
         if runningCopies.count > 1 {
