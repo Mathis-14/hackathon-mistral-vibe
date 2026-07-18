@@ -172,7 +172,10 @@ struct VibeBuddyPanelContainer: View {
             messages: controller.messages,
             isStreaming: controller.isStreaming,
             onSubmit: { [weak controller] text in controller?.submit(text) },
-            headerAccessory: AnyView(routinesToggleButton),
+            headerAccessory: AnyView(HStack(spacing: 6) {
+                routinesToggleButton
+                quitButton
+            }),
             overrideContent: isShowingRoutines
                 ? AnyView(RoutinesView(store: routineStore, scheduler: routineScheduler))
                 : nil,
@@ -181,6 +184,21 @@ struct VibeBuddyPanelContainer: View {
                 : AnyView(VibeSessionsStrip(sessions: vibeSessionWatcher.sessions))
         )
         .onAppear { vibeSessionWatcher.start() }
+    }
+
+    private var quitButton: some View {
+        Button {
+            NSApplication.shared.terminate(nil)
+        } label: {
+            Image(systemName: "power")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(DS.Colors.textTertiary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 6)
+                .background(DS.Colors.surface2, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Quit Vibe Buddy")
     }
 
     private var routinesToggleButton: some View {

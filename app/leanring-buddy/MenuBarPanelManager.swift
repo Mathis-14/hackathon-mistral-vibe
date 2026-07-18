@@ -82,6 +82,21 @@ final class MenuBarPanelManager: NSObject {
         button.image?.isTemplate = true
         button.action = #selector(statusItemClicked)
         button.target = self
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    /// Right-click on the status item shows the standard app menu (Quit).
+    private func showStatusItemMenu() {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Quit Vibe Buddy", action: #selector(quitApp), keyEquivalent: "q")
+            .target = self
+        statusItem?.menu = menu
+        statusItem?.button?.performClick(nil)
+        statusItem?.menu = nil // detach so left-click keeps toggling the panel
+    }
+
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
     }
 
     /// Opens the panel automatically on app launch so the user sees
@@ -94,7 +109,11 @@ final class MenuBarPanelManager: NSObject {
     }
 
     @objc private func statusItemClicked() {
-        togglePanel()
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showStatusItemMenu()
+        } else {
+            togglePanel()
+        }
     }
 
     /// Toggles the panel — same behavior as clicking the status item.
