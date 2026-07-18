@@ -32,6 +32,11 @@ final class MenuBarPanelManager: NSObject {
     private var dismissPanelObserver: NSObjectProtocol?
 
     private let companionManager: CompanionManager
+
+    /// Owns the panel's chat transcript and the worker round-trip. Exposed
+    /// so the push-to-talk transcript can be routed into the same pipeline
+    /// as typed input (v1 wiring).
+    let chatController = VibeBuddyChatController()
     private let panelWidth: CGFloat = VibeBuddyPanelView.preferredSize.width
     private let panelHeight: CGFloat = VibeBuddyPanelView.preferredSize.height
 
@@ -114,41 +119,7 @@ final class MenuBarPanelManager: NSObject {
     }
 
     private func createPanel() {
-        // TODO(integration): CompanionManager will own the transcript +
-        // streaming state. Replace the sample messages with its published
-        // values and route onSubmit into its send/stream pipeline. Until
-        // then the panel is fed demo data and logs submissions.
-        let sampleMessages: [ChatMessage] = [
-            ChatMessage(
-                id: UUID(),
-                role: .user,
-                text: "What does this error in my terminal mean?"
-            ),
-            ChatMessage(
-                id: UUID(),
-                role: .assistant,
-                text: "That's a CORS rejection — your worker on 127.0.0.1:8787 doesn't allow the browser origin. Add an Access-Control-Allow-Origin header to the /chat response and retry."
-            ),
-            ChatMessage(
-                id: UUID(),
-                role: .user,
-                text: "Can you open Xcode and get me started?"
-            ),
-            ChatMessage(
-                id: UUID(),
-                role: .assistant,
-                text: "Opening Xcode now — you'll see the trace on screen as I go."
-            ),
-        ]
-
-        let vibeBuddyPanelView = VibeBuddyPanelView(
-            messages: sampleMessages,
-            isStreaming: false,
-            onSubmit: { text in
-                print("VibeBuddy onSubmit: \(text)")
-            }
-        )
-        // END TODO(integration)
+        let vibeBuddyPanelView = VibeBuddyPanelContainer(controller: chatController)
 
         let hostingView = NSHostingView(rootView: vibeBuddyPanelView)
         hostingView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
