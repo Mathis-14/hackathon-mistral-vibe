@@ -32,6 +32,7 @@
   --color-flag-5: var(--flag-5);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-space-mono);
+  --font-mistral: var(--font-alt-mistral);
 }
 
 body {
