@@ -30,6 +30,7 @@ struct leanring_buddyApp: App {
 @MainActor
 final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarPanelManager: MenuBarPanelManager?
+    private var globalSummonHotkeyMonitor: GlobalSummonHotkeyMonitor?
     private let companionManager = CompanionManager()
     private var sparkleUpdaterController: SPUStandardUpdaterController?
 
@@ -43,6 +44,16 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
         ClickyAnalytics.trackAppOpened()
 
         menuBarPanelManager = MenuBarPanelManager(companionManager: companionManager)
+
+        // Global summon hotkey (fn+control, ctrl+option fallback — D003):
+        // toggles the panel from anywhere in macOS.
+        let summonHotkeyMonitor = GlobalSummonHotkeyMonitor()
+        summonHotkeyMonitor.onSummonChordActivated = { [weak self] in
+            self?.menuBarPanelManager?.togglePanel()
+        }
+        summonHotkeyMonitor.start()
+        globalSummonHotkeyMonitor = summonHotkeyMonitor
+
         companionManager.start()
         // Auto-open the panel if the user still needs to do something:
         // either they haven't onboarded yet, or permissions were revoked.
