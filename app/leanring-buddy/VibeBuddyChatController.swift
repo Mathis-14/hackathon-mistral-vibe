@@ -164,8 +164,19 @@ struct VibeBuddyPanelContainer: View {
     @ObservedObject var controller: VibeBuddyChatController
     @ObservedObject var routineStore: RoutineStore
     let routineScheduler: RoutineScheduler
+    @ObservedObject var permissionsSource: CompanionManager
     @State private var isShowingRoutines = false
     @StateObject private var vibeSessionWatcher = VibeSessionWatcher()
+
+    private var permissionsBanner: AnyView? {
+        let needsAccessibility = !permissionsSource.hasAccessibilityPermission
+        let needsScreen = !permissionsSource.hasScreenRecordingPermission
+        guard needsAccessibility || needsScreen else { return nil }
+        return AnyView(PermissionsBanner(
+            needsAccessibility: needsAccessibility,
+            needsScreenRecording: needsScreen
+        ))
+    }
 
     var body: some View {
         VibeBuddyPanelView(
@@ -181,7 +192,8 @@ struct VibeBuddyPanelContainer: View {
                 : nil,
             belowTranscript: vibeSessionWatcher.sessions.isEmpty || isShowingRoutines
                 ? nil
-                : AnyView(VibeSessionsStrip(sessions: vibeSessionWatcher.sessions))
+                : AnyView(VibeSessionsStrip(sessions: vibeSessionWatcher.sessions)),
+            banner: permissionsBanner
         )
         .onAppear { vibeSessionWatcher.start() }
     }

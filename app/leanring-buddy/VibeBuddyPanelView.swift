@@ -57,6 +57,10 @@ struct VibeBuddyPanelView: View {
     /// used for the live Vibe Code sessions section (D012). Hidden when nil.
     var belowTranscript: AnyView? = nil
 
+    /// Optional banner pinned right under the header — used for the
+    /// missing-permissions setup flow. Hidden when nil.
+    var banner: AnyView? = nil
+
     /// The panel's natural size — the hosting NSPanel should match this.
     static let preferredSize = CGSize(width: 400, height: 560)
 
@@ -69,6 +73,10 @@ struct VibeBuddyPanelView: View {
             Rectangle()
                 .fill(DS.Colors.borderSubtle.opacity(0.7))
                 .frame(height: 1)
+
+            if let banner {
+                banner
+            }
 
             Group {
                 if let overrideContent {

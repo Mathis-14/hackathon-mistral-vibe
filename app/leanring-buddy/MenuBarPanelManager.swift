@@ -151,7 +151,8 @@ final class MenuBarPanelManager: NSObject {
         let vibeBuddyPanelView = VibeBuddyPanelContainer(
             controller: chatController,
             routineStore: routineStore,
-            routineScheduler: routineScheduler
+            routineScheduler: routineScheduler,
+            permissionsSource: companionManager
         )
 
         let hostingView = NSHostingView(rootView: vibeBuddyPanelView)
