@@ -63,7 +63,7 @@ final class WakeWordSidecarMonitor {
     private func launch(python: URL, script: URL) {
         let sidecar = Process()
         sidecar.executableURL = python
-        sidecar.arguments = [script.path, "--threshold", "0.5", "--cooldown", "2.0"]
+        sidecar.arguments = [script.path, "--threshold", "0.45", "--cooldown", "2.0"]
         sidecar.currentDirectoryURL = script.deletingLastPathComponent()
 
         let stdout = Pipe()

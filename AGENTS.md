@@ -121,6 +121,7 @@ Never fire a live routine on stage — the routine result and its alert are pre-
 - D009 — Split: Edouard owns ALL of `app/` (Swift engine + UI); Mathis owns `worker/` agentic layer + `fixtures/` + landing page/.dmg (built on his second Mac) + PRODUCT/demo. Why: nobody shares an Xcode target; Mathis's tracks ship independently.
 - D010 — Landing page + signed .dmg are IN as a Mathis parallel track that never gates the live demo. Why: product-feel win judges reward; notarization delays must not threaten 21:00.
 - D011 — Feature freeze 19:30, then fixtures/backup video + rehearse ×2 (once from the .dmg install if it exists); demo ~21:00. Why: adopted from Edouard's plan, shifted to the real event schedule.
+- D012 — Panel shows live local Vibe Code CLI sessions (read-only VibeSessionWatcher over ~/.vibe/logs/session, active + last-30-min, title/cost/status). Why: ties Vibe Buddy to the Vibe Code lineup in front of a Mistral jury at zero risk (pure reads, section hidden when empty). Arbitrated by Edouard.
 
 ## Demo checklist (run before the demo)
 

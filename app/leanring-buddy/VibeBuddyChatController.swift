@@ -134,6 +134,7 @@ struct VibeBuddyPanelContainer: View {
     @ObservedObject var routineStore: RoutineStore
     let routineScheduler: RoutineScheduler
     @State private var isShowingRoutines = false
+    @StateObject private var vibeSessionWatcher = VibeSessionWatcher()
 
     var body: some View {
         VibeBuddyPanelView(
@@ -143,8 +144,12 @@ struct VibeBuddyPanelContainer: View {
             headerAccessory: AnyView(routinesToggleButton),
             overrideContent: isShowingRoutines
                 ? AnyView(RoutinesView(store: routineStore, scheduler: routineScheduler))
-                : nil
+                : nil,
+            belowTranscript: vibeSessionWatcher.sessions.isEmpty || isShowingRoutines
+                ? nil
+                : AnyView(VibeSessionsStrip(sessions: vibeSessionWatcher.sessions))
         )
+        .onAppear { vibeSessionWatcher.start() }
     }
 
     private var routinesToggleButton: some View {

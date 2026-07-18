@@ -53,6 +53,10 @@ struct VibeBuddyPanelView: View {
     /// active. Defaulted so all existing call sites keep compiling unchanged.
     var overrideContent: AnyView? = nil
 
+    /// Optional strip pinned between the transcript and the composer —
+    /// used for the live Vibe Code sessions section (D012). Hidden when nil.
+    var belowTranscript: AnyView? = nil
+
     /// The panel's natural size — the hosting NSPanel should match this.
     static let preferredSize = CGSize(width: 400, height: 560)
 
@@ -74,6 +78,10 @@ struct VibeBuddyPanelView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if let belowTranscript {
+                belowTranscript
+            }
 
             footer
         }
