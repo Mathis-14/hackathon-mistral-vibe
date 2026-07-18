@@ -1,3 +1,7 @@
-app/wakeword/.venv/
+.env
+worker/.dev.vars
+node_modules/
+.wrangler/
 .DS_Store
+app/wakeword/.venv/
 app/leanring-buddy.xcodeproj/project.xcworkspace/xcuserdata/
