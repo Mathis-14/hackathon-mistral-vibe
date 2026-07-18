@@ -1,55 +1,46 @@
 # Vibe Buddy — Worker Contract (for the Swift app)
 
-Worker runs at `http://127.0.0.1:8787` (`cd worker && npx wrangler dev`). All Mistral keys live here; the app never sends auth. Everything below is verified by `bash scripts/smoke.sh` (replay) and `DEMO_MODE=live bash scripts/smoke.sh` (real API) — both GREEN as of 2026-07-18 12:40.
+Worker runs at `http://127.0.0.1:8787` (`cd worker && npx wrangler dev`). All Mistral keys live here; the app never sends auth. Everything below is verified by `bash scripts/smoke.sh` (replay) and `DEMO_MODE=live bash scripts/smoke.sh` (real API) — both GREEN as of 2026-07-18 ~15:30.
 
-**The streaming path is byte-compatible with the scaffold's `ClaudeAPI.swift`. If you keep that file, `/chat` works with ZERO changes** (the base URL is already `127.0.0.1:8787`, and the worker ignores the `model` field the app sends).
+**The worker speaks the shipped app's contract (`app/CHAT_CONTRACT.md`) verbatim — `WorkerChatClient.swift` and `SSEEventParser` work with ZERO changes.** Dialect detection is per request: a body containing the `screenshot_base64` key (the app always sends it, even as `null`) gets the app dialect below; anything else gets the legacy Anthropic-style dialect (kept for smoke/curl compat, see git history of this file).
 
-## POST /chat
+## POST /chat — app dialect (THE contract)
 
-Request — exactly what `ClaudeAPI.analyzeImageStreaming` already builds:
+Request — exactly what `WorkerChatClient` builds:
 
 ```json
-{
-  "model": "ignored-by-worker",
-  "max_tokens": 1024,
-  "stream": true,
-  "system": "optional app-side system text (worker appends it to its own)",
-  "messages": [
-    { "role": "user", "content": "plain text" },
-    { "role": "assistant", "content": "plain text" },
-    { "role": "user", "content": [
-        { "type": "image", "source": { "type": "base64", "media_type": "image/jpeg", "data": "<b64>" } },
-        { "type": "text", "text": "Screen 1 (image dimensions: 1280x800 pixels)" },
-        { "type": "text", "text": "the user's question" }
-    ]}
-  ]
-}
+{ "messages": [{ "role": "user|assistant|system", "content": "plain text" }],
+  "screenshot_base64": "<raw base64 JPEG, no data: prefix>"  }
 ```
 
-Streaming response (`content-type: text/event-stream`): the only load-bearing event is
+- Full conversation, oldest first. `system` messages are merged into the worker's own system prompt (worker's first).
+- `screenshot_base64` is `null` when the user opted out / capture failed — the worker treats that as text-only chat. When present it is attached to the LAST user message as image context for Mistral.
+
+Response (`content-type: text/event-stream`), one `data:` line + blank line per event:
 
 ```
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"chunk"}}
+data: {"type":"delta","text":"chunk of the reply"}
+data: {"type":"done"}
 ```
 
-Framing events (`message_start`, `content_block_start/stop`, `message_stop`) are emitted around it; the stream ends by closing (no `[DONE]` line — the scaffold parser handles both). Non-streaming (`"stream": false`) returns `{"content":[{"type":"text","text":"..."}], "stop_reason":"..."}`.
+Always streamed. Errors: non-2xx with a plain-text body. Comment lines / unknown types are never sent but would be ignored by the parser anyway.
 
-### Action tokens — WHAT YOU ADD (the only new Swift work on /chat)
+### Action tokens
 
-The worker's system prompt makes the model end its reply with at most ONE action token when the user asked it to open something. Parse the **fully-accumulated** reply text (same pattern as the scaffold's `parsePointingCoordinates`):
+The worker's system prompt makes the model end its reply with at most ONE action token when the user asked it to open something — parse on the fully-accumulated text:
 
 ```
-\[OPEN_APP:([^\]]+)\]\s*$     → NSWorkspace.shared.open app by name (e.g. "Notes", "Google Chrome")
+\[OPEN_APP:([^\]]+)\]\s*$     → NSWorkspace open app by name ("Notes", "Google Chrome")
 \[OPEN_URL:([^\]]+)\]\s*$     → NSWorkspace.shared.open(URL(string: $1)!)
 ```
 
-Strip the token from the displayed/spoken text. Draw the overlay trace when executing — actuation must never be invisible. Live-measured reliability: 10/10 correct trailing tokens, 0/2 false positives on non-action prompts (2026-07-18).
+Live-measured reliability on `mistral-medium-3-5`: 10/10 correct trailing tokens, 0/2 false positives (2026-07-18). `[OPEN_URL:]` is emitted by the model too — the app currently parses only `[OPEN_APP:]` (`ActuationTokenParser`); adding URL support is an app-side nicety, not a blocker.
 
-## POST /transcribe  (Voxtral STT — replaces AssemblyAI/OpenAI providers)
+## POST /transcribe  (Voxtral STT)
 
-Multipart form: `file` = 16 kHz mono PCM16 WAV (what `BuddyWAVFileBuilder` already produces; filename/mime `audio/wav`). Optional `language`. Any `model`/`response_format` fields are ignored (worker forces `voxtral-mini-latest`).
+Multipart form: `file` = 16 kHz mono PCM16 WAV (what `BuddyWAVFileBuilder` produces; mime `audio/wav`). Optional `language`. Any `model`/`response_format` fields are ignored (worker forces `voxtral-mini-latest`). **No auth header.**
 
-Response: `{ "text": "transcript" }` — same shape the scaffold's `TranscriptionResponse` decoder expects. So: clone `OpenAIAudioTranscriptionProvider`, point it at `http://127.0.0.1:8787/transcribe`, delete its Info.plist API key usage (send no auth), done.
+Response: `{ "text": "transcript" }` — same shape the existing `TranscriptionResponse` decoder expects. `WorkerTranscriptionProvider.swift` in the app targets this endpoint.
 
 ## GET /health
 
@@ -58,9 +49,9 @@ Response: `{ "text": "transcript" }` — same shape the scaffold's `Transcriptio
 ## Modes & demo safety
 
 - `DEMO_MODE` env (worker/.dev.vars or wrangler.toml): `replay` (default — recorded fixtures, no network, no key) or `live`. A request header `x-demo-mode: live|replay` overrides per call — the app doesn't need to send it.
-- In live mode every upstream call is time-boxed (60 s, one retry); `/chat` then falls back to the fixture instead of erroring. Response header `x-vibe-source: live|replay|replay-fallback` tells you what really served it.
-- Replay fixtures stream at realistic pace and cover: plain answer, screenshot-grounded answer, actuation answer ending in `[OPEN_APP:Notes]` (auto-picked: image attached → screenshot fixture; "open/launch/ouvre/lance" in last user text → actuation fixture).
+- Replay serves the recorded fixtures re-framed in whichever dialect the caller spoke, at realistic pace: plain answer, screenshot-grounded answer, actuation answer ending in `[OPEN_APP:Notes]` (auto-picked: screenshot attached → screenshot fixture; "open/launch/ouvre/lance" in last user text → actuation fixture).
+- In live mode every upstream call is time-boxed (60 s, one retry); `/chat` then falls back to the fixture instead of erroring. Response header `x-vibe-source: live|replay|replay-fallback` tells you what really served it. `/transcribe` surfaces upstream errors instead (a canned transcript of unsaid words is worse).
 
 ## Gotchas honored for you
 
-- CORS `*`, `OPTIONS` → 204, `HEAD /` → 405 (your TLS warmup is fine), no inbound auth, streaming starts well inside your 120 s request timeout.
+- CORS `*`, `OPTIONS` → 204, `HEAD /` → 405, no inbound auth, streaming starts well inside the client's 60 s timeout.

@@ -6,7 +6,7 @@ macOS menu-bar-only companion for Mistral: a global fn+control hotkey summons a 
 
 In plan mode, run `/iterate-q` before locking the plan.
 
-This file is the engineering source of truth: read it before any task, update it in the same change when a durable decision or constraint appears. When the plan changes, this file changes. Fresh session? `docs/CONTEXT.md` is the dated state snapshot (what's built, verified, uncommitted, next).
+This file is the engineering source of truth: read it before any task, update it in the same change when a durable decision or constraint appears. When the plan changes, this file changes. Fresh session? `docs/CONTEXT.md` is the dated state snapshot (what's built, verified, uncommitted, next) and `docs/PLAN.md` is the approved in-flight work plan.
 
 ## Core flow (what the code implements)
 
@@ -129,6 +129,9 @@ Never fire a live routine on stage — the routine result and its alert are pre-
 - D014 — Chat model id = `mistral-medium-3-5` set in wrangler.toml. Why: the docs-card id `mistral-medium-3-5-26-04` is rejected by the API; id verified against `GET /v1/models`.
 - D015 — `DEMO_MODE` is overridable per-request via `x-demo-mode` header. Why: lets smoke test live against an already-running replay worker without restarting it; `x-vibe-source` response header exposes silent fixture fallbacks.
 - D016 — Panel shows live local Vibe Code CLI sessions (read-only VibeSessionWatcher over ~/.vibe/logs/session, active + last-30-min, title/cost/status). Why: ties Vibe Buddy to the Vibe Code lineup in front of a Mistral jury at zero risk (pure reads, section hidden when empty). Arbitrated by Edouard.
+- D017 — /chat adopts the shipped app's wire shape as primary ({messages, screenshot_base64} in; `{"type":"delta"}`/`{"type":"done"}` SSE out), auto-detected per request by the `screenshot_base64` key; the D012 Anthropic shape stays supported for compat. Why: Edouard's WorkerChatClient/SSEEventParser define this shape with tests; worker-only change = zero Swift edits. Implemented + replay/live smoke GREEN 2026-07-18 ~15:45 (branch feat/app-integration).
+- D018 — App STT retargets to the worker's /transcribe (Voxtral), done by Mathis's track with an explicit heads-up to Edouard before touching app/; Apple Speech stays the on-device fallback. Why: current providers ship a key in the app (violates MUST #5) or aren't Mistral; /transcribe is live-verified. Plan: docs/PLAN.md Part B.
+- D019 — Panel restyles to the Mistral Vibe web LIGHT look (white bg, dark text, orange #FF7000 accents, pill input bar), driven by Mathis on his second Mac. Why: user arbitration from a Vibe screenshot; brand-match in front of the Mistral jury. Sacrificable at the 19:30 freeze; dark theme stays one checkout away. Plan: docs/PLAN.md Part C.
 
 ## Demo checklist (run before the demo)
 

@@ -3,9 +3,11 @@
 //  leanring-buddy
 //
 //  Centralized design system using the Mistral orange accent palette on
-//  dark surfaces, with a unified button style system. All colors, button
-//  styles, and interaction states are defined here as the single source
-//  of truth. Token NAMES are stable API — only values change on re-theme.
+//  light "Vibe" surfaces (matching chat.mistral.ai — warm white, dark
+//  text, orange accents; D019), with a unified button style system. All
+//  colors, button styles, and interaction states are defined here as the
+//  single source of truth. Token NAMES are stable API — only values
+//  change on re-theme.
 //
 
 import SwiftUI
@@ -22,43 +24,44 @@ enum DS {
     enum Colors {
 
         // ── Backgrounds ──────────────────────────────────────────────
-        // Layered surfaces from deepest to most elevated.
-        // Higher surfaces are lighter, creating a sense of depth.
+        // Layered light surfaces (Vibe web look): the base is a warm
+        // near-white; elevated interactive states get progressively
+        // warmer/darker so hover and press still read on white.
 
         /// The deepest background — used for the main app window fill.
-        /// Anchored at Mistral dark #1A1A1A.
-        static let background = Color(hex: "#1A1A1A")
+        /// Warm near-white, like chat.mistral.ai.
+        static let background = Color(hex: "#FAFAF8")
 
         /// First elevation layer — used for cards, sidebar, top bar backgrounds.
-        static let surface1 = Color(hex: "#222222")
+        static let surface1 = Color(hex: "#F4F2EE")
 
         /// Second elevation layer — used for input fields, elevated cards, chat bubbles.
-        static let surface2 = Color(hex: "#2A2A2A")
+        static let surface2 = Color(hex: "#FFFFFF")
 
         /// Third elevation layer — used for hover backgrounds on interactive elements.
-        static let surface3 = Color(hex: "#323232")
+        static let surface3 = Color(hex: "#F0EDE8")
 
         /// Fourth elevation layer — used for active/pressed states on interactive elements.
-        static let surface4 = Color(hex: "#3A3A3A")
+        static let surface4 = Color(hex: "#E8E4DD")
 
         // ── Borders ──────────────────────────────────────────────────
 
         /// Subtle border — used for card outlines, dividers, input field borders.
-        static let borderSubtle = Color(hex: "#3D3D3D")
+        static let borderSubtle = Color(hex: "#E5E1DA")
 
         /// Strong border — used for focused inputs, hovered card outlines.
-        static let borderStrong = Color(hex: "#4C4C4C")
+        static let borderStrong = Color(hex: "#CFC9C0")
 
         // ── Text ─────────────────────────────────────────────────────
 
-        /// Primary text — main body text, titles, headings. Slightly warm white.
-        static let textPrimary = Color(hex: "#F0EEEB")
+        /// Primary text — main body text, titles, headings. Mistral near-black.
+        static let textPrimary = Color(hex: "#1A1A1A")
 
         /// Secondary text — descriptions, hints, muted labels.
-        static let textSecondary = Color(hex: "#B0ACA5")
+        static let textSecondary = Color(hex: "#6E6963")
 
         /// Tertiary text — very muted, used for section labels, timestamps, disabled text.
-        static let textTertiary = Color(hex: "#7A756D")
+        static let textTertiary = Color(hex: "#9C968E")
 
         /// Text used on top of the accent fill (#FF7000 orange), like the primary button label.
         /// Near-black on #FF7000 achieves ~7.5:1 contrast (white would only reach ~2.8:1),
@@ -97,13 +100,14 @@ enum DS {
         /// Accent fill — used for solid button backgrounds. Mistral orange #FF7000.
         static let accent = blue600
 
-        /// Accent hover — slightly brighter orange (#FF8A2E) so hover reads
-        /// as "lit up" on the dark surfaces.
-        static let accentHover = blue400
+        /// Accent hover — slightly darker orange (#E06000): on light
+        /// surfaces hover reads as "pressed into" rather than lit up.
+        static let accentHover = blue700
 
-        /// Accent text — bright orange used for accent-colored text and icons
-        /// on dark backgrounds (links, active nav items, highlighted labels).
-        static let accentText = blue400
+        /// Accent text — deep orange used for accent-colored text and icons
+        /// on light backgrounds (links, active nav items, highlighted labels).
+        /// The bright #FF8A2E ramp steps are unreadable on white (~2.4:1).
+        static let accentText = blue700
 
         /// Very subtle accent tint — used for selected item backgrounds (e.g. current step
         /// in the sidebar). Low opacity so it doesn't overpower.
@@ -118,8 +122,8 @@ enum DS {
         /// Destructive hover state.
         static let destructiveHover = Color(hex: "#FF7169")
 
-        /// Destructive used for text on dark backgrounds (brighter for readability).
-        static let destructiveText = Color(hex: "#FF837C")
+        /// Destructive used for text on light backgrounds (darker for readability).
+        static let destructiveText = Color(hex: "#D0342C")
 
         /// Success — checkmarks, granted status, completion indicators.
         /// Apple system green so success states are visually distinct from the orange accent.
@@ -128,16 +132,16 @@ enum DS {
         /// Warning — caution messages, manual verification failure explanations.
         static let warning = Color(hex: "#FFB340")
 
-        /// Warning text — brighter variant for text on dark backgrounds.
-        static let warningText = Color(hex: "#FFC266")
+        /// Warning text — darker variant for text on light backgrounds.
+        static let warningText = Color(hex: "#B25E00")
 
         /// Info/feature highlight — used for prompt card headers, code highlights.
-        /// Lighter than accentText so informational elements are visually distinct
+        /// Deeper than accentText so informational elements are visually distinct
         /// from interactive accent-colored elements.
-        static let info = Color(hex: "#FFC08A")
+        static let info = Color(hex: "#B54E00")
 
-        /// Inline code text color — light peach for monospace code snippets.
-        static let codeText = Color(hex: "#FFD9B8")
+        /// Inline code text color — deep amber for monospace code snippets.
+        static let codeText = Color(hex: "#8C3D00")
 
         // ── Overlay Cursor ───────────────────────────────────────────
 
@@ -157,17 +161,17 @@ enum DS {
         // ── Help Chat ──────────────────────────────────────────────
 
         /// User message bubble background in the help chat.
-        /// Deep orange (scale 800) — clearly distinct from the dark surface
-        /// while keeping white text readable (~5:1 contrast).
-        static let helpChatUserBubble = blue800
+        /// Soft orange tint (scale 100) — clearly distinct from the white
+        /// surface while keeping the dark text readable.
+        static let helpChatUserBubble = blue100
 
-        /// Slightly lighter variant for hover/pressed states on user bubbles.
-        static let helpChatUserBubbleHover = blue700
+        /// Slightly deeper variant for hover/pressed states on user bubbles.
+        static let helpChatUserBubbleHover = blue200
 
         /// Footer/backdrop behind the floating help chat.
-        /// Slightly lighter than the main window background so the chat zone reads
+        /// Slightly warmer than the main window background so the chat zone reads
         /// as a distinct docked surface even before the pill input is visible.
-        static let helpChatBackdrop = Color(hex: "#212121")
+        static let helpChatBackdrop = Color(hex: "#F4F2EE")
 
         // ── Disabled State ───────────────────────────────────────────
         // Following Material Design 3's disabled pattern:

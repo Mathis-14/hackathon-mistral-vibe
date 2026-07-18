@@ -3,10 +3,16 @@
  *
  * Holds the Mistral API key so it never ships in the Mac app binary.
  * The Swift app talks ONLY to this Worker; the Worker fans out to
- * api.mistral.ai. The inbound shapes are byte-compatible with the
- * Xiexie/Clicky scaffold's Swift client (Anthropic-Messages-style
- * request, `content_block_delta`/`text_delta` SSE out) — see
- * worker/CONTRACT.md. No Anthropic API is ever called.
+ * api.mistral.ai. No Anthropic API is ever called.
+ *
+ * /chat speaks TWO inbound wire shapes, auto-detected per request:
+ *   app       — the shipped app's WorkerChatClient (app/CHAT_CONTRACT.md):
+ *               {messages:[{role,content:string}], screenshot_base64} in,
+ *               `data: {"type":"delta","text"}` / `{"type":"done"}` SSE out.
+ *               Detected by the screenshot_base64 key (always present).
+ *   anthropic — the scaffold's original Anthropic-Messages shape
+ *               (`content_block_delta`/`text_delta` SSE out), kept for
+ *               compat. See worker/CONTRACT.md.
  *
  * Routes:
  *   POST /chat        → Mistral chat completions (streamed or not).
@@ -47,7 +53,7 @@ const REPLAY_EVENT_DELAY_MS = 30;
  * so prompt iteration never requires an app rebuild. The app may send
  * its own `system` string; both are forwarded (ours first).
  */
-const ACTION_SYSTEM_PROMPT = `You are Vibe Buddy, a Mistral-powered macOS companion summoned over the user's current work with a hotkey. You usually receive a screenshot of the user's screen — ground your answer in what is actually visible. Be concise and concrete: short sentences, no filler.
+const ACTION_SYSTEM_PROMPT = `You are Vibe Buddy, a Mistral-powered macOS companion summoned over the user's current work with a hotkey. You usually receive a screenshot of the user's screen — ground your answer in what is actually visible. Be concise and concrete: short sentences, no filler. Your reply renders in a narrow floating panel — a few short sentences beat paragraphs.
 
 You can act on the user's Mac with exactly two actions, triggered by ending your reply with ONE action token:
 - [OPEN_APP:App Name] opens a macOS application. Use the exact application name, e.g. [OPEN_APP:Notes], [OPEN_APP:Google Chrome].
@@ -110,11 +116,10 @@ function resolveMode(request: Request, env: Env): DemoMode {
 // /chat — scaffold-shaped in, Mistral upstream, scaffold SSE out
 // ───────────────────────────────────────────────────────────────────
 async function handleChat(request: Request, env: Env): Promise<Response> {
-  const incoming = parseAnthropicMessagesRequest(await request.json());
-  const isStreaming = incoming.stream === true;
+  const { wire, request: incoming, isStreaming } = parseChatRequest(await request.json());
 
   if (resolveMode(request, env) === "replay") {
-    return replayChat(incoming, isStreaming, "replay");
+    return replayChat(incoming, wire, isStreaming, "replay");
   }
 
   const baseURL = (env.MISTRAL_BASE_URL || DEFAULT_BASE).replace(/\/$/, "");
@@ -145,11 +150,11 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
   if (!upstream || !upstream.ok || (isStreaming && !upstream.body)) {
     // Fall through to the fixture: a broken venue network serves the
     // recorded reply instead of an error dialog on stage.
-    return replayChat(incoming, isStreaming, "replay-fallback");
+    return replayChat(incoming, wire, isStreaming, "replay-fallback");
   }
 
   if (isStreaming && upstream.body) {
-    return new Response(mistralStreamToAnthropic(upstream.body), {
+    return new Response(mistralStreamToSSE(upstream.body, wire), {
       status: 200,
       headers: {
         "content-type": "text/event-stream",
@@ -226,6 +231,7 @@ function pickChatFixture(incoming: AnthropicMessagesRequest): string {
 
 function replayChat(
   incoming: AnthropicMessagesRequest,
+  wire: WireFormat,
   isStreaming: boolean,
   source: "replay" | "replay-fallback",
 ): Response {
@@ -238,7 +244,17 @@ function replayChat(
   }
 
   const encoder = new TextEncoder();
-  const events = fixture.split("\n\n").filter((event) => event.trim().length > 0);
+  // Fixtures are recorded in the anthropic framing; re-emit them in the
+  // requested wire's framing so replay stays byte-identical to live.
+  const events =
+    wire === "app"
+      ? [
+          ...fixtureDeltaChunks(fixture).map(
+            (text) => `data: ${JSON.stringify({ type: "delta", text })}`,
+          ),
+          `data: ${JSON.stringify({ type: "done" })}`,
+        ]
+      : fixture.split("\n\n").filter((event) => event.trim().length > 0);
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       for (const event of events) {
@@ -259,9 +275,9 @@ function replayChat(
   });
 }
 
-/** Reassemble the full reply text from a fixture's text_delta events. */
-function fixtureFullText(fixture: string): string {
-  let text = "";
+/** Extract the ordered text chunks from a fixture's text_delta events. */
+function fixtureDeltaChunks(fixture: string): string[] {
+  const chunks: string[] = [];
   for (const line of fixture.split("\n")) {
     if (!line.startsWith("data: ")) continue;
     try {
@@ -270,13 +286,18 @@ function fixtureFullText(fixture: string): string {
         delta?: { type?: string; text?: string };
       };
       if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-        text += parsed.delta.text ?? "";
+        chunks.push(parsed.delta.text ?? "");
       }
     } catch {
       // Non-JSON data lines ([DONE]) are expected — skip.
     }
   }
-  return text;
+  return chunks;
+}
+
+/** Reassemble the full reply text from a fixture's text_delta events. */
+function fixtureFullText(fixture: string): string {
+  return fixtureDeltaChunks(fixture).join("");
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -308,6 +329,77 @@ class RequestValidationError extends Error {}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Which dialect the caller speaks. "app" is the shipped Swift client
+ * (WorkerChatClient/SSEEventParser — app/CHAT_CONTRACT.md); "anthropic"
+ * is the original scaffold shape, kept for smoke/curl compatibility.
+ */
+type WireFormat = "anthropic" | "app";
+
+interface ParsedChatRequest {
+  wire: WireFormat;
+  request: AnthropicMessagesRequest;
+  isStreaming: boolean;
+}
+
+function parseChatRequest(value: unknown): ParsedChatRequest {
+  // The app's client always includes the screenshot_base64 key, even as
+  // null (WorkerChatClient.swift) — that key IS the dialect marker.
+  if (isRecord(value) && "screenshot_base64" in value) {
+    return parseAppChatRequest(value);
+  }
+  const request = parseAnthropicMessagesRequest(value);
+  return { wire: "anthropic", request, isStreaming: request.stream === true };
+}
+
+function parseAppChatRequest(value: Record<string, unknown>): ParsedChatRequest {
+  if (!Array.isArray(value.messages)) {
+    throw new RequestValidationError("Request must include a messages array");
+  }
+  const screenshot = value.screenshot_base64;
+  if (screenshot !== null && typeof screenshot !== "string") {
+    throw new RequestValidationError("screenshot_base64 must be a base64 string or null");
+  }
+
+  const systemParts: string[] = [];
+  const messages: AnthropicMessage[] = [];
+  for (const raw of value.messages) {
+    if (!isRecord(raw) || typeof raw.content !== "string") {
+      throw new RequestValidationError("Each message must have string content");
+    }
+    if (raw.role === "system") {
+      systemParts.push(raw.content);
+      continue;
+    }
+    if (raw.role !== "user" && raw.role !== "assistant") {
+      throw new RequestValidationError("Each message must have a valid role");
+    }
+    messages.push({ role: raw.role, content: raw.content });
+  }
+
+  // The screenshot belongs to the CURRENT turn: attach it to the last
+  // user message as an image block (the app captures JPEG, per contract).
+  if (typeof screenshot === "string" && screenshot.length > 0) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role !== "user" || typeof message.content !== "string") continue;
+      messages[i] = {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: screenshot } },
+          { type: "text", text: message.content },
+        ],
+      };
+      break;
+    }
+  }
+
+  const request: AnthropicMessagesRequest = { messages };
+  if (systemParts.length > 0) request.system = systemParts.join("\n\n");
+  // The app's client only consumes SSE — this wire is always streamed.
+  return { wire: "app", request, isStreaming: true };
 }
 
 function parseAnthropicMessagesRequest(value: unknown): AnthropicMessagesRequest {
@@ -487,30 +579,39 @@ function anthropicMessage(text: string, stopReason: string): Record<string, unkn
 }
 
 /**
- * Mistral chat-completions SSE → the Anthropic-shaped SSE the Swift
- * parser consumes. Only `content_block_delta` carries payload; the
- * framing events keep any strict consumer happy. Upstream `[DONE]` is
- * consumed here; downstream ends by stream close.
+ * Mistral chat-completions SSE → the wire's SSE dialect.
+ * App wire: `data: {"type":"delta","text"}` per chunk, `{"type":"done"}`
+ * at the end (what SSEEventParser in Swift consumes). Anthropic wire:
+ * `content_block_delta` events with framing, ends by stream close.
+ * Upstream `[DONE]` is consumed here either way.
  */
-function mistralStreamToAnthropic(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+function mistralStreamToSSE(
+  upstream: ReadableStream<Uint8Array>,
+  wire: WireFormat,
+): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
 
   const emit = (controller: ReadableStreamDefaultController<Uint8Array>, name: string, data: unknown) => {
     controller.enqueue(encoder.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
   };
+  const emitApp = (controller: ReadableStreamDefaultController<Uint8Array>, data: unknown) => {
+    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+  };
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
-      emit(controller, "message_start", {
-        type: "message_start",
-        message: { id: `msg_${Date.now()}`, type: "message", role: "assistant", content: [] },
-      });
-      emit(controller, "content_block_start", {
-        type: "content_block_start",
-        index: 0,
-        content_block: { type: "text", text: "" },
-      });
+      if (wire === "anthropic") {
+        emit(controller, "message_start", {
+          type: "message_start",
+          message: { id: `msg_${Date.now()}`, type: "message", role: "assistant", content: [] },
+        });
+        emit(controller, "content_block_start", {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "text", text: "" },
+        });
+      }
 
       const reader = upstream.getReader();
       let buffer = "";
@@ -532,11 +633,15 @@ function mistralStreamToAnthropic(upstream: ReadableStream<Uint8Array>): Readabl
               try {
                 const textChunk = parseMistralTextDelta(JSON.parse(payload));
                 if (textChunk && textChunk.length > 0) {
-                  emit(controller, "content_block_delta", {
-                    type: "content_block_delta",
-                    index: 0,
-                    delta: { type: "text_delta", text: textChunk },
-                  });
+                  if (wire === "app") {
+                    emitApp(controller, { type: "delta", text: textChunk });
+                  } else {
+                    emit(controller, "content_block_delta", {
+                      type: "content_block_delta",
+                      index: 0,
+                      delta: { type: "text_delta", text: textChunk },
+                    });
+                  }
                 }
               } catch (parseError) {
                 console.error("[/chat] unparseable upstream chunk", parseError);
@@ -545,8 +650,12 @@ function mistralStreamToAnthropic(upstream: ReadableStream<Uint8Array>): Readabl
           }
         }
       } finally {
-        emit(controller, "content_block_stop", { type: "content_block_stop", index: 0 });
-        emit(controller, "message_stop", { type: "message_stop" });
+        if (wire === "app") {
+          emitApp(controller, { type: "done" });
+        } else {
+          emit(controller, "content_block_stop", { type: "content_block_stop", index: 0 });
+          emit(controller, "message_stop", { type: "message_stop" });
+        }
         controller.close();
       }
     },
