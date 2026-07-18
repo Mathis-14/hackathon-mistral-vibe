@@ -10,11 +10,17 @@
 
 ```json
 { "messages": [{ "role": "user", "content": "..." }],
-  "screenshot_base64": null }
+  "screenshot_base64": "/9j/4AAQSkZJRg..." }
 ```
 
 - `role` is `"user" | "assistant" | "system"`; full conversation, oldest first.
-- `screenshot_base64` is **always present and always `null` in v0** (decision D007 — screenshots come in v1).
+- `screenshot_base64` is **always present** (v1, decision D007). Either:
+  - a base64-encoded **JPEG** of the user's frontmost display (the one with the
+    cursor), captured once at submit time, downscaled to **max 1280 px wide**,
+    quality **0.6** — **raw base64, NO `data:image/jpeg;base64,` prefix**; or
+  - `null` when the user opted out (`vibebuddy.includeScreenshot` UserDefault
+    explicitly `false`), capture failed, or Screen Recording permission is
+    missing. The worker must treat `null` as text-only chat.
 
 ## Response — SSE stream (`Content-Type: text/event-stream`)
 

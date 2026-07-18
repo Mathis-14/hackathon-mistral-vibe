@@ -8,6 +8,7 @@
 //  unreachable / "vibebuddy.chatMode" == "replay").
 //
 
+import AppKit
 import Combine
 import Foundation
 import SwiftUI
@@ -20,6 +21,17 @@ final class VibeBuddyChatController: ObservableObject {
     /// badge it so a rehearsal never gets mistaken for a live run.
     @Published private(set) var lastReplyWasReplayed = false
 
+    /// UserDefaults key for the screenshot-context opt-out. Screenshots are
+    /// attached unless the user explicitly set this to false:
+    /// `defaults write com.vibebuddy.app vibebuddy.includeScreenshot -bool false`
+    static let includeScreenshotDefaultsKey = "vibebuddy.includeScreenshot"
+
+    /// Screenshot context is on by default (PRODUCT.md MUST #2); only an
+    /// explicit `false` in UserDefaults disables it.
+    private var isScreenshotContextEnabled: Bool {
+        UserDefaults.standard.object(forKey: Self.includeScreenshotDefaultsKey) as? Bool ?? true
+    }
+
     func submit(_ text: String) {
         guard !isStreaming else { return }
         messages.append(ChatMessage(id: UUID(), role: .user, text: text))
@@ -30,9 +42,16 @@ final class VibeBuddyChatController: ObservableObject {
         }
 
         Task {
+            // Captured ONCE per submit, before the request, so the worker
+            // sees the screen as it was when the user asked.
+            let screenshotBase64 = await captureFrontmostScreenshotBase64()
+
             var assistantMessageId: UUID?
             do {
-                let result = try await WorkerChatReplay.streamReply(messages: history) { [weak self] delta in
+                let result = try await WorkerChatReplay.streamReply(
+                    messages: history,
+                    screenshotBase64: screenshotBase64
+                ) { [weak self] delta in
                     guard let self else { return }
                     if let id = assistantMessageId,
                        let index = self.messages.firstIndex(where: { $0.id == id }) {
@@ -49,6 +68,33 @@ final class VibeBuddyChatController: ObservableObject {
                 messages.append(ChatMessage(id: UUID(), role: .assistant, text: explanation))
             }
             isStreaming = false
+        }
+    }
+
+    /// Captures the frontmost display (the one with the cursor) as a JPEG
+    /// no wider than 1280 px, re-encoded at 0.6 quality, and returns it as
+    /// raw base64 — NO `data:` URI prefix (see app/CHAT_CONTRACT.md).
+    /// Returns nil when the user opted out, capture fails, or the Screen
+    /// Recording permission is missing — the chat then proceeds text-only.
+    private func captureFrontmostScreenshotBase64() async -> String? {
+        guard isScreenshotContextEnabled else { return nil }
+        do {
+            // CompanionScreenCaptureUtility already excludes our own windows
+            // and downscales each display to max 1280 px on the long edge.
+            let captures = try await CompanionScreenCaptureUtility.captureAllScreensAsJPEG()
+            guard let capture = captures.first(where: { $0.isCursorScreen }) ?? captures.first else {
+                return nil
+            }
+            // Re-encode at 0.6 quality (the utility emits 0.8) to keep the
+            // request body small; fall back to the original data if decoding fails.
+            guard let bitmap = NSBitmapImageRep(data: capture.imageData),
+                  let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.6]) else {
+                return capture.imageData.base64EncodedString()
+            }
+            return jpegData.base64EncodedString()
+        } catch {
+            print("📸 Vibe Buddy: screenshot context unavailable (\(error.localizedDescription)) — sending text only")
+            return nil
         }
     }
 }

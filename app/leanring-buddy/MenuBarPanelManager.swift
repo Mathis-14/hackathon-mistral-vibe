@@ -101,7 +101,9 @@ final class MenuBarPanelManager: NSObject {
 
     // MARK: - Panel Lifecycle
 
-    private func showPanel() {
+    /// Shows (or re-fronts) the panel. Internal so the app delegate can
+    /// surface it when a push-to-talk transcript arrives.
+    func showPanel() {
         if panel == nil {
             createPanel()
         }

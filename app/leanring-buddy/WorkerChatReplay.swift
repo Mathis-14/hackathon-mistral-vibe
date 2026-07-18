@@ -37,8 +37,11 @@ enum WorkerChatReplay {
     /// Integrator entry point: streams from the live worker when it is
     /// reachable, otherwise falls back to the built-in fixture. `onDelta`
     /// receives each new text fragment on the main actor either way.
+    /// `screenshotBase64` (raw base64 JPEG, no data-URI prefix) is forwarded
+    /// to the live worker; replay ignores it.
     static func streamReply(
         messages: [(role: String, content: String)],
+        screenshotBase64: String? = nil,
         client: WorkerChatClient = WorkerChatClient(),
         onDelta: @escaping @MainActor (String) -> Void
     ) async throws -> ChatReplyResult {
@@ -48,7 +51,11 @@ enum WorkerChatReplay {
         }
 
         do {
-            let text = try await client.streamReply(messages: messages, onDelta: onDelta)
+            let text = try await client.streamReply(
+                messages: messages,
+                screenshotBase64: screenshotBase64,
+                onDelta: onDelta
+            )
             return ChatReplyResult(text: text, isReplayed: false)
         } catch let error as WorkerChatError {
             guard case .connectionFailed = error else { throw error }

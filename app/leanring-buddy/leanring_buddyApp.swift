@@ -45,6 +45,16 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
 
         menuBarPanelManager = MenuBarPanelManager(companionManager: companionManager)
 
+        // Push-to-talk lands in the same pipeline as typed input: the final
+        // transcript opens the panel and submits through the chat controller,
+        // so the exchange is always visible on screen (PRODUCT.md MUST #6).
+        companionManager.onTranscriptReady = { [weak self] transcript in
+            guard let panelManager = self?.menuBarPanelManager else { return }
+            panelManager.showPanel()
+            panelManager.chatController.submit(transcript)
+        }
+        print("🎙️ Vibe Buddy: transcript hook installed — push-to-talk routes into the chat panel")
+
         // Global summon hotkey (fn+control, ctrl+option fallback — D003):
         // toggles the panel from anywhere in macOS.
         let summonHotkeyMonitor = GlobalSummonHotkeyMonitor()
