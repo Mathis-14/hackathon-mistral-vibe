@@ -117,6 +117,12 @@ final class MenuBarPanelManager: NSObject {
     }
 
     @objc private func statusItemClicked() {
+        togglePanel()
+    }
+
+    /// Toggles the panel — same behavior as clicking the status item.
+    /// Called by the global summon hotkey (fn+control).
+    func togglePanel() {
         if let panel, panel.isVisible {
             hidePanel()
         } else {
