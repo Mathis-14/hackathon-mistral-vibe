@@ -14,7 +14,7 @@ This file is the engineering source of truth: read it before any task, update it
 fn+control (CGEvent listen-only tap, flagsChanged: .maskSecondaryFn + .maskControl) → panel summons (NSStatusItem + KeyablePanel)
 Voice (core): push-to-talk mic → POST /transcribe (multipart) → Voxtral → transcript lands in the same input path as typed text
 ScreenCaptureKit JPEG + user text → POST http://127.0.0.1:8787/chat (streaming SSE)
-worker/src/index.ts translates to Mistral /v1/chat/completions (stream) → re-emits SSE → CompanionManager renders chunks
+worker/src/index.ts translates to Mistral /v1/chat/completions (stream) → re-emits SSE → VibeBuddyChatController renders chunks in VibeBuddyPanelView
 [OPEN_APP:Name] token parsed from the stream → NSWorkspace.shared.open + overlay trace (actuation has no other code path, by design)
 Routines: in-app scheduler (JSON in UserDefaults) → same /chat path → UNUserNotificationCenter alert
 ```
@@ -41,7 +41,7 @@ cd worker && npx tsc --noEmit      # must pass before every commit; app side: Xc
 ## Architecture
 
 ```
-app/          # Swift sources — entry *App.swift; CompanionManager.swift = the state machine + stream/token parser
+app/          # Xcode project — entry *App.swift; CompanionManager = permissions/dictation state machine; VibeBuddyChatController = transcript + stream pipeline (SSEEventParser + ActuationTokenParser)
 worker/src/   # index.ts — single fetch handler: /chat (translate + stream, DEMO_MODE switch) + /transcribe (Voxtral)
 fixtures/     # recorded SSE replies, demo screenshots, transcript fixture, pre-baked routine artifact
 landing/      # one-page download site + .dmg link (Mathis, second Mac — never gates the demo)
@@ -49,7 +49,7 @@ scripts/      # smoke.sh
 ```
 
 - Dependencies point inward: `app → worker HTTP contract ← fixtures`. The Swift app never sees a provider format or an API key — only the worker's SSE shape.
-- Parse at the boundary: every stream event and tool token goes through the one parser in CompanionManager before anything acts on it.
+- Parse at the boundary: every stream event goes through SSEEventParser, every tool token through ActuationTokenParser — both driven solely by VibeBuddyChatController — before anything acts on it.
 - Time-box every external call (LLM 60s, one retry), then fall through to the fixture. A hung call must not hang the demo.
 - Make illegal states unrepresentable: actuation fires only from a parsed `[OPEN_APP:]` token inside an active session, and always draws its overlay — no silent path exists.
 - Don't scaffold: no folders, seams, or abstractions the demo path doesn't need today.
@@ -128,6 +128,7 @@ Never fire a live routine on stage — the routine result and its alert are pre-
 - D013 — Action set = `[OPEN_APP:]` + `[OPEN_URL:]`, prompt-driven (no function calling). Why: user chose the set; live test showed 10/10 token reliability and 0 false positives, so the simpler path won; tool-calls upgrade documented (single-chunk delta, verified) if ever needed.
 - D014 — Chat model id = `mistral-medium-3-5` set in wrangler.toml. Why: the docs-card id `mistral-medium-3-5-26-04` is rejected by the API; id verified against `GET /v1/models`.
 - D015 — `DEMO_MODE` is overridable per-request via `x-demo-mode` header. Why: lets smoke test live against an already-running replay worker without restarting it; `x-vibe-source` response header exposes silent fixture fallbacks.
+- D016 — Panel shows live local Vibe Code CLI sessions (read-only VibeSessionWatcher over ~/.vibe/logs/session, active + last-30-min, title/cost/status). Why: ties Vibe Buddy to the Vibe Code lineup in front of a Mistral jury at zero risk (pure reads, section hidden when empty). Arbitrated by Edouard.
 
 ## Demo checklist (run before the demo)
 
