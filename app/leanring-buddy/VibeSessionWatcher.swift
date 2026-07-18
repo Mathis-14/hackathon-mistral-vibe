@@ -26,6 +26,10 @@ struct VibeSession: Identifiable, Equatable {
     var costUsd: Double
     var startedAt: Date
     var endedAt: Date?
+    /// The meta.json `session_id` UUID — what `vibe --resume` accepts
+    /// (the directory name is rejected; verified live on vibe 2.21.0).
+    /// Defaulted so existing call sites keep compiling.
+    var resumeId: String = ""
 
     var projectName: String {
         URL(fileURLWithPath: workingDirectory).lastPathComponent
@@ -171,7 +175,8 @@ final class VibeSessionWatcher: ObservableObject {
             isActive: endTimeString == nil,
             costUsd: costUsd,
             startedAt: (json["start_time"] as? String).flatMap(Self.parseDate) ?? modificationDate(of: directory),
-            endedAt: endTimeString.flatMap(Self.parseDate)
+            endedAt: endTimeString.flatMap(Self.parseDate),
+            resumeId: (json["session_id"] as? String) ?? ""
         )
     }
 

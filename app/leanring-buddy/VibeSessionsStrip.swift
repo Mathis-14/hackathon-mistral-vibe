@@ -11,6 +11,9 @@ import SwiftUI
 
 struct VibeSessionsStrip: View {
     let sessions: [VibeSession]
+    /// Called when a session row is clicked — the container opens the
+    /// transcript inspector. Defaulted so existing call sites compile.
+    var onSelect: (VibeSession) -> Void = { _ in }
 
     var body: some View {
         if sessions.isEmpty {
@@ -23,33 +26,40 @@ struct VibeSessionsStrip: View {
                     .foregroundColor(DS.Colors.textTertiary)
 
                 ForEach(sessions) { session in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(session.isActive ? DS.Colors.success : DS.Colors.textTertiary)
-                            .frame(width: 6, height: 6)
+                    Button {
+                        onSelect(session)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(session.isActive ? DS.Colors.success : DS.Colors.textTertiary)
+                                .frame(width: 6, height: 6)
 
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(session.title)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(DS.Colors.textPrimary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(session.title)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(DS.Colors.textPrimary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
 
-                            Text(detailLine(for: session))
-                                .font(.system(size: 9.5, design: .monospaced))
+                                Text(detailLine(for: session))
+                                    .font(.system(size: 9.5, design: .monospaced))
+                                    .foregroundColor(DS.Colors.textTertiary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer(minLength: 0)
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
                                 .foregroundColor(DS.Colors.textTertiary)
-                                .lineLimit(1)
                         }
-
-                        Spacer(minLength: 0)
-
-                        Image(systemName: "terminal")
-                            .font(.system(size: 10))
-                            .foregroundColor(DS.Colors.textTertiary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(DS.Colors.surface1, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(DS.Colors.surface1, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .buttonStyle(.plain)
+                    .help("Open transcript")
                 }
             }
             .padding(.horizontal, 12)
