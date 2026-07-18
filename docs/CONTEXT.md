@@ -1,66 +1,73 @@
-# Session context snapshot — 2026-07-18 ~12:55 (hackathon day)
+# Session context snapshot — 2026-07-18 ~15:45 (hackathon day)
 
-Restart brief for a fresh agent. Read order: `AGENTS.md` (rules, stack, decision log
-D001–D015, verified API facts) → `PRODUCT.md` (pitch, MUSTs, demo script) →
-`worker/CONTRACT.md` (exact app↔worker contract) → this file (what exists right now).
-Nothing here duplicates those files; this is state + pointers.
+Restart brief for a fresh agent (any machine). Read order: `AGENTS.md` (rules, stack,
+decision log D001–D019, verified API facts) → `PRODUCT.md` (pitch, MUSTs, demo script) →
+`WORKER_BRIEF.md` (Edouard's handoff, app-side state) → `app/CHAT_CONTRACT.md` (the wire
+shape the app actually speaks) → `docs/PLAN.md` (the approved work plan, Parts A/B/C) →
+this file (what is true right now).
 
-## Where the build stands (state-to-verify, dated 2026-07-18)
+## Where the build stands (state-to-verify, dated 2026-07-18 ~15:00)
 
-- Branch **`feat/agentic`**. The v0 agentic slice is committed in the same change as
-  this snapshot: `worker/`, `fixtures/`, `scripts/`, `docs/`, `.gitignore`, and the
-  AGENTS.md decision log/API facts update.
-- The v0 agentic layer (Mathis's half) is **done and verified**:
-  - `worker/src/index.ts` — `/chat` (Mistral streaming, scaffold-compatible SSE),
-    `/transcribe` (Voxtral), `/health`, `DEMO_MODE` replay + live fallback.
-  - `bash scripts/smoke.sh` GREEN (replay) and `DEMO_MODE=live bash scripts/smoke.sh`
-    GREEN against the real API on `mistral-medium-3-5`. Reliability + tool_calls
-    verification numbers: see AGENTS.md → External APIs.
-- Edouard's remote **`origin/wip/edouard`** is at `53f1f72`: panel/hotkey, worker SSE
-  chat, screenshot context, push-to-talk routing, `[OPEN_APP:]` actuation + overlay,
-  routines/alerts, and the Mistral theme are present (recorded build green, 21/21
-  tests). It is not merged into this branch. Remaining worker-contract gaps observed:
-  voice still uses direct OpenAI or Apple Speech instead of `/transcribe`, and
-  `[OPEN_URL:]` is not parsed.
+- Everything is merged into **`main`**: Edouard's full app (PR #5 — panel, fn+control
+  hotkey, screenshot context, push-to-talk, `[OPEN_APP:]` actuation + overlay, routines,
+  wake-word stretch, Vibe sessions strip; Xcode build green, 21/21 tests), the worker
+  (PR #3), the landing page (PR #1).
+- **Branch `feat/app-integration` — all three plan parts SHIPPED (user-authorized),
+  Edouard takes over from here:**
+  - Part A (b3e39ca): worker speaks the app's /chat wire shape (auto-detected by the
+    `screenshot_base64` key; delta/done SSE out; legacy Anthropic shape kept). Replay
+    AND live smokes GREEN including three new app-wire checks. **Live demo unblocked
+    worker-side.**
+  - Part B (d62f89b): `WorkerTranscriptionProvider.swift` (Voxtral via worker
+    /transcribe, no auth) is now the factory default; Apple Speech fallback kept.
+  - Part C (b5cd9a7): DesignSystem re-themed to the Vibe LIGHT look (value-only token
+    flip; dark theme = revert of that commit).
+- **NOT yet verified: the Xcode build.** This Mac has no Xcode — Parts B/C are only
+  `swiftc -parse` syntax-checked. FIRST TASK for Edouard/the second Mac: build, run,
+  eyeball the light theme (contrast on routines tab + overlay), test push-to-talk →
+  Voxtral and the WORKER_BRIEF 2-minute live-chat test.
+- Still open app-side (nice-to-have): `ActuationTokenParser` only parses `[OPEN_APP:]`;
+  the model also emits `[OPEN_URL:]` (worker/CONTRACT.md).
+
+## Machine notes
+
+- Mathis's main Mac has NO Xcode (Command Line Tools only) — app dev happens on his
+  SECOND Mac: install Xcode (App Store or developer.apple.com/download/all .xip),
+  macOS-platform only, free Apple ID team, open `app/leanring-buddy.xcodeproj`,
+  Signing & Capabilities → personal team, Cmd-R, re-grant Accessibility + Screen
+  Recording + Microphone after rebuilds.
+- Mistral API key: `.env` (repo root) and `worker/.dev.vars` — both gitignored, NEVER
+  committed. On a new machine: copy `worker/.dev.vars.example` → `.dev.vars`, paste key.
 
 ## Bring the stack up / verify (copy-paste)
 
 ```bash
-cd worker && npx wrangler dev          # serves http://127.0.0.1:8787 — keep open
+cd worker && npx wrangler dev          # http://127.0.0.1:8787 — exactly ONE instance
 curl -s http://127.0.0.1:8787/health   # {"ok":true,"mode":"replay","model":"mistral-medium-3-5"}
 bash scripts/smoke.sh                  # replay — after EVERY change
 DEMO_MODE=live bash scripts/smoke.sh   # real API, costs credits, use sparingly
 ```
 
-A `wrangler dev` may already be running from the last session — check `/health` before
-starting a second one (hard rule: exactly ONE instance, see AGENTS.md Runbook).
+## Next steps (in order, per docs/PLAN.md)
 
-## Secrets (never commit, never restate)
+1. **Part A — worker adopts the app wire shape** (detect `screenshot_base64` key; app
+   framing out; replay in app framing; smoke.sh app-contract checks; update
+   worker/CONTRACT.md). Unblocks the live demo. Worker-only, zero Swift changes.
+2. E2E against the real app (WORKER_BRIEF "2-minute test").
+3. **Part B — voice**: new `WorkerTranscriptionProvider.swift` → `127.0.0.1:8787/transcribe`,
+   no auth; factory tries it first, Apple Speech fallback. Ping Edouard before touching app/.
+4. **Part C — Vibe-light UI restyle** (DesignSystem.swift tokens → panel → components),
+   user drives on the second Mac, agent guides. Never gates the demo.
+5. Freeze 19:30 → fresh fixtures + backup video → rehearse ×2. Demo ~21:00.
 
-- Mistral API key lives in `.env` (repo root) and `worker/.dev.vars` — both gitignored.
-  To (re)create: copy `worker/.dev.vars.example` and paste the key from `.env`.
-- Never commit: `.env`, `worker/.dev.vars`, `node_modules/`, `.wrangler/`.
+## Hard rules that bit us today (respect them)
 
-## For the next commit/PR agent
-
-- Commit rules are hard and live in AGENTS.md → "What never relaxes": no AI/tool
-  attribution in messages, never on `main`, and the user gates every commit.
-- The scaffold reference clone (Edouard's winning repo, MIT) sits in the session
-  scratchpad only — it is a reference, not part of this repo.
-
-## Next tracks (in priority order, per plan + arbitration)
-
-1. Support Edouard's remaining `worker/CONTRACT.md` wiring, starting with the local
-   Voxtral `/transcribe` provider; integrate branches only on the user's direction.
-2. Mathis v1 items: routines pre-baked artifact + native-alert fixture; refresh
-   `fixtures/screenshot.jpg` with a real capture (current one is synthetic — the
-   terminal lacked Screen Recording permission).
-3. Parallel track (never gates the demo): landing page + signed .dmg on Mathis's
-   second Mac, via the scaffold's `release.sh`.
-4. Stretch only after v1 E2E: see AGENTS.md Build order v2.
+- The user gates EVERY commit; never on `main`; no AI/tool attribution in messages.
+- Plan mode / "read-only" means exactly that — do not edit anything until the user
+  says go, even obvious-looking fixes.
+- Stay in your directories (D009); `app/` edits require flagging Edouard first.
 
 ## Maintenance rule
 
-Update the "Where the build stands" section when a slice lands or merges; append
-durable decisions to AGENTS.md's decision log, not here. Delete this file's stale
-state rather than letting it drift.
+Update "Where the build stands" when a slice lands; append durable decisions to
+AGENTS.md's decision log, not here. Delete stale state rather than letting it drift.
