@@ -6,7 +6,6 @@ import PixelConfetti from "@/components/PixelConfetti";
 import FeatureCard from "@/components/FeatureCard";
 import HeroSticker from "@/components/HeroSticker";
 import SwipeStack from "@/components/originkit/SwipeStack";
-import ShinyPill from "@/components/originkit/ShinyPill";
 import Typewriter from "@/components/originkit/Typewriter";
 
 const FEATURES = [
@@ -39,7 +38,6 @@ const FEATURES = [
 export default function Home() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
-      <PixelConfetti corner="top-left" seed={7} />
       <PixelConfetti corner="bottom-right" seed={23} />
 
       {/* Top strip — deck header pastiche */}
@@ -60,23 +58,7 @@ export default function Home() {
         <div className="grid w-full items-center gap-16 lg:grid-cols-[1.1fr_1fr]">
           {/* Left — headline + CTA */}
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-hairline bg-paper-2 px-3.5 py-1.5">
-              <span className="h-2 w-2 bg-accent" aria-hidden="true" />
-              <ShinyPill
-                text="BUILT ON MISTRAL VIBE"
-                textColor="#71717A"
-                shineColor="#FA500F"
-                speed={2.5}
-                font={{
-                  fontFamily: "var(--font-space-mono)",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  letterSpacing: "0.12em",
-                }}
-              />
-            </div>
-
-            <h1 className="mt-8 font-mono text-4xl font-bold leading-tight tracking-tight sm:text-5xl md:text-6xl">
+            <h1 className="font-mistral text-4xl font-medium leading-[1.05] tracking-[-0.02em] sm:text-5xl md:text-6xl">
               Mistral.
               <br />
               One keystroke away.
@@ -178,10 +160,7 @@ export default function Home() {
 
       {/* Footer — cat on the hairline, flag strip */}
       <footer className="relative z-10">
-        <div className="mx-auto flex max-w-6xl items-end justify-between px-6 md:px-10">
-          <p className="pb-3 font-mono text-[11px] uppercase tracking-wider text-muted">
-            Needs Accessibility + Screen Recording · Keys stay server-side
-          </p>
+        <div className="mx-auto flex max-w-6xl items-end justify-end px-6 md:px-10">
           <Image
             src="/cat.gif"
             alt="Mistral pixel cat"
