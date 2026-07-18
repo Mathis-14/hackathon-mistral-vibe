@@ -61,17 +61,35 @@ struct VibeBuddyChatBubble: View {
         HStack(spacing: 0) {
             if isUser { Spacer(minLength: 48) }
 
-            bubbleContent
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(bubbleBackground)
-                .overlay(bubbleShape.stroke(
-                    isUser ? DS.Colors.accent.opacity(0.42) : DS.Colors.borderSubtle,
-                    lineWidth: 1
-                ))
+            VStack(alignment: .trailing, spacing: 4) {
+                bubbleContent
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(bubbleBackground)
+                    .overlay(bubbleShape.stroke(
+                        isUser ? DS.Colors.accent.opacity(0.42) : DS.Colors.borderSubtle,
+                        lineWidth: 1
+                    ))
+
+                if isUser && message.hasScreenshot {
+                    screenshotCaption
+                }
+            }
 
             if !isUser { Spacer(minLength: 48) }
         }
+    }
+
+    /// Tiny right-aligned caption under a user bubble noting that a
+    /// screenshot of the screen was attached to the request.
+    private var screenshotCaption: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "camera.viewfinder")
+                .font(.system(size: 9, weight: .medium))
+            Text("screen attached")
+                .font(.system(size: 10))
+        }
+        .foregroundColor(DS.Colors.textTertiary)
     }
 
     /// User bubbles get a soft top-to-bottom orange gradient so they read

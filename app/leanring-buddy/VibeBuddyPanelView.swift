@@ -27,6 +27,9 @@ struct ChatMessage: Identifiable, Equatable {
     let id: UUID
     var role: ChatRole
     var text: String
+    /// True when a screenshot of the user's screen was attached to this
+    /// (user) message. Defaulted so all existing call sites keep compiling.
+    var hasScreenshot: Bool = false
 }
 
 // MARK: - Vibe Buddy Panel
@@ -203,7 +206,8 @@ struct VibeBuddyPanelView: View {
             ChatMessage(
                 id: UUID(),
                 role: .user,
-                text: "What does this stack trace in my terminal mean?"
+                text: "What does this stack trace in my terminal mean?",
+                hasScreenshot: true
             ),
             ChatMessage(
                 id: UUID(),

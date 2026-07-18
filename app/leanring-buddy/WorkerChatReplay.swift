@@ -85,6 +85,11 @@ enum WorkerChatReplay {
 
     /// Realistic fixture: a helpful Mistral answer about Swift code on screen.
     /// Mock data must look REAL on screen (AGENTS.md) — no lorem ipsum.
+    ///
+    /// The reply embeds exactly ONE `[OPEN_APP:Notes]` token mid-text so an
+    /// offline rehearsal exercises the full hero moment: the token streams
+    /// through the same word-chunk deltas as live replies, which drives
+    /// ActuationTokenParser's incremental path end-to-end without a worker.
     private static let fixtureReply = """
         Looking at the `CompanionManager` on your screen, the streaming handler is \
         mostly right, but there is one real bug: you append each incoming chunk to \
@@ -93,7 +98,9 @@ enum WorkerChatReplay {
         the flicker you are seeing. Mark the append `@MainActor` (or wrap it in \
         `await MainActor.run { ... }`) and it goes away.
 
-        Two smaller things worth fixing while you are in there:
+        I'll open Notes so you can keep these steps handy while you refactor. \
+        [OPEN_APP:Notes] Now, about the retry logic — two smaller things worth \
+        fixing while you are in there:
 
         1. The request timeout is 120 seconds — for an interactive panel, 60 seconds \
         with a single retry keeps a hung call from freezing the UI.

@@ -34,7 +34,8 @@ final class VibeBuddyChatController: ObservableObject {
 
     func submit(_ text: String) {
         guard !isStreaming else { return }
-        messages.append(ChatMessage(id: UUID(), role: .user, text: text))
+        let userMessageId = UUID()
+        messages.append(ChatMessage(id: userMessageId, role: .user, text: text))
         isStreaming = true
 
         let history = messages.map { message in
@@ -45,6 +46,12 @@ final class VibeBuddyChatController: ObservableObject {
             // Captured ONCE per submit, before the request, so the worker
             // sees the screen as it was when the user asked.
             let screenshotBase64 = await captureFrontmostScreenshotBase64()
+            if screenshotBase64 != nil,
+               let userIndex = messages.firstIndex(where: { $0.id == userMessageId }) {
+                // Badge the user message so the transcript shows the screen
+                // context actually went along with the question.
+                messages[userIndex].hasScreenshot = true
+            }
 
             var assistantMessageId: UUID?
             // Every stream token goes through this single parser before
