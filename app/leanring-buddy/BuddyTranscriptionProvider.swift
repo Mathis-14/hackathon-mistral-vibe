@@ -30,16 +30,16 @@ protocol BuddyTranscriptionProvider {
 }
 
 enum BuddyTranscriptionProviderFactory {
-    // Orchestral: Voxtral (via the OpenAI-compatible transcription provider,
-    // pointed at api.mistral.ai) is the primary backend; Apple Speech stays as
-    // the zero-config on-device fallback so push-to-talk always works.
+    // Voxtral through the worker /transcribe route is the primary backend
+    // (MUST #7); Apple Speech remains the zero-config on-device fallback,
+    // forced with `defaults write com.vibebuddy.app vibebuddy.stt apple`.
     static func makeDefaultProvider() -> any BuddyTranscriptionProvider {
-        let voxtralProvider = OpenAIAudioTranscriptionProvider()
+        let voxtralProvider = VoxtralTranscriptionProvider()
         if voxtralProvider.isConfigured {
-            print("🎙️ Transcription: using \(voxtralProvider.displayName)")
+            print("🎙️ Transcription: using \(voxtralProvider.displayName) via \(VoxtralTranscriptionProvider.transcribeURL)")
             return voxtralProvider
         }
-        print("⚠️ Transcription: Voxtral not configured, falling back to Apple Speech")
+        print("⚠️ Transcription: Voxtral disabled — falling back to Apple Speech")
         return AppleSpeechTranscriptionProvider()
     }
 }

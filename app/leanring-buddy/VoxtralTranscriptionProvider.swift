@@ -1,14 +1,21 @@
 //
-//  OpenAIAudioTranscriptionProvider.swift
-//  leanring-buddy
+//  VoxtralTranscriptionProvider.swift
+//  Vibe Buddy
 //
-//  AI transcription provider backed by OpenAI's audio transcription API.
+//  Push-to-talk transcription through Mistral's Voxtral, via the worker's
+//  /transcribe route (multipart passthrough to /v1/audio/transcriptions,
+//  model voxtral-mini-latest). The app never holds an API key (MUST #5) —
+//  the worker injects it server-side.
+//
+//  Config (UserDefaults):
+//    vibebuddy.workerURL  — worker base URL, default http://127.0.0.1:8787
+//    vibebuddy.stt        — set to "apple" to force the on-device fallback
 //
 
 import AVFoundation
 import Foundation
 
-struct OpenAIAudioTranscriptionProviderError: LocalizedError {
+struct VoxtralTranscriptionProviderError: LocalizedError {
     let message: String
 
     var errorDescription: String? {
@@ -16,21 +23,26 @@ struct OpenAIAudioTranscriptionProviderError: LocalizedError {
     }
 }
 
-final class OpenAIAudioTranscriptionProvider: BuddyTranscriptionProvider {
-    private let apiKey = AppBundleConfiguration.stringValue(forKey: "OpenAIAPIKey")
-    private let modelName = AppBundleConfiguration.stringValue(forKey: "OpenAITranscriptionModel")
-        ?? "gpt-4o-transcribe"
+final class VoxtralTranscriptionProvider: BuddyTranscriptionProvider {
+    static let workerURLDefaultsKey = "vibebuddy.workerURL"
+    static let sttModeDefaultsKey = "vibebuddy.stt"
 
-    let displayName = "OpenAI"
+    let displayName = "Voxtral"
     let requiresSpeechRecognitionPermission = false
 
     var isConfigured: Bool {
-        apiKey != nil
+        UserDefaults.standard.string(forKey: Self.sttModeDefaultsKey) != "apple"
     }
 
     var unavailableExplanation: String? {
         guard !isConfigured else { return nil }
-        return "OpenAI transcription is not configured. Add OpenAIAPIKey to Info.plist."
+        return "Voxtral is disabled (vibebuddy.stt=apple) — using Apple Speech."
+    }
+
+    static var transcribeURL: URL {
+        let base = UserDefaults.standard.string(forKey: workerURLDefaultsKey)
+            ?? "http://127.0.0.1:8787"
+        return URL(string: base)!.appendingPathComponent("transcribe")
     }
 
     func startStreamingSession(
@@ -39,16 +51,8 @@ final class OpenAIAudioTranscriptionProvider: BuddyTranscriptionProvider {
         onFinalTranscriptReady: @escaping (String) -> Void,
         onError: @escaping (Error) -> Void
     ) async throws -> any BuddyStreamingTranscriptionSession {
-        guard let apiKey else {
-            throw OpenAIAudioTranscriptionProviderError(
-                message: unavailableExplanation ?? "OpenAI transcription is not configured."
-            )
-        }
-
-        return OpenAIAudioTranscriptionSession(
-            apiKey: apiKey,
-            modelName: modelName,
-            keyterms: keyterms,
+        VoxtralTranscriptionSession(
+            transcribeURL: Self.transcribeURL,
             onTranscriptUpdate: onTranscriptUpdate,
             onFinalTranscriptReady: onFinalTranscriptReady,
             onError: onError
@@ -56,24 +60,21 @@ final class OpenAIAudioTranscriptionProvider: BuddyTranscriptionProvider {
     }
 }
 
-private final class OpenAIAudioTranscriptionSession: BuddyStreamingTranscriptionSession {
+private final class VoxtralTranscriptionSession: BuddyStreamingTranscriptionSession {
     let finalTranscriptFallbackDelaySeconds: TimeInterval = 8.0
 
     private struct TranscriptionResponse: Decodable {
         let text: String
     }
 
-    private static let transcriptionURL = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
     private static let targetSampleRate = 16_000
 
-    private let apiKey: String
-    private let modelName: String
-    private let keyterms: [String]
+    private let transcribeURL: URL
     private let onTranscriptUpdate: (String) -> Void
     private let onFinalTranscriptReady: (String) -> Void
     private let onError: (Error) -> Void
 
-    private let stateQueue = DispatchQueue(label: "com.learningbuddy.openai.transcription")
+    private let stateQueue = DispatchQueue(label: "com.vibebuddy.voxtral.transcription")
     private let audioPCM16Converter = BuddyPCM16AudioConverter(
         targetSampleRate: Double(targetSampleRate)
     )
@@ -86,24 +87,19 @@ private final class OpenAIAudioTranscriptionSession: BuddyStreamingTranscription
     private var transcriptionUploadTask: Task<Void, Never>?
 
     init(
-        apiKey: String,
-        modelName: String,
-        keyterms: [String],
+        transcribeURL: URL,
         onTranscriptUpdate: @escaping (String) -> Void,
         onFinalTranscriptReady: @escaping (String) -> Void,
         onError: @escaping (Error) -> Void
     ) {
-        self.apiKey = apiKey
-        self.modelName = modelName
-        self.keyterms = keyterms
+        self.transcribeURL = transcribeURL
         self.onTranscriptUpdate = onTranscriptUpdate
         self.onFinalTranscriptReady = onFinalTranscriptReady
         self.onError = onError
 
         let urlSessionConfiguration = URLSessionConfiguration.default
-        urlSessionConfiguration.timeoutIntervalForRequest = 45
-        urlSessionConfiguration.timeoutIntervalForResource = 90
-        urlSessionConfiguration.waitsForConnectivity = true
+        urlSessionConfiguration.timeoutIntervalForRequest = 30
+        urlSessionConfiguration.timeoutIntervalForResource = 60
         self.urlSession = URLSession(configuration: urlSessionConfiguration)
     }
 
@@ -169,36 +165,47 @@ private final class OpenAIAudioTranscriptionSession: BuddyStreamingTranscription
             deliverFinalTranscript(transcriptText)
         } catch {
             guard !stateQueue.sync(execute: { isCancelled }) else { return }
-            print("[OpenAI Transcription] ❌ Upload failed (audio size: \(wavAudioData.count) bytes): \(error.localizedDescription)")
+            print("[Voxtral] ❌ /transcribe failed (audio size: \(wavAudioData.count) bytes): \(error.localizedDescription)")
             onError(error)
         }
     }
 
     private func requestTranscription(for wavAudioData: Data) async throws -> String {
         let multipartBoundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: Self.transcriptionURL)
+        var request = URLRequest(url: transcribeURL)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(multipartBoundary)", forHTTPHeaderField: "Content-Type")
 
-        let requestBodyData = makeMultipartRequestBody(
-            boundary: multipartBoundary,
-            wavAudioData: wavAudioData
+        // Minimal field set: the worker owns auth and forces the model when
+        // absent; no language field so Voxtral auto-detects (FR/EN demo).
+        var requestBodyData = Data()
+        requestBodyData.appendMultipartFormField(
+            named: "model",
+            value: "voxtral-mini-latest",
+            usingBoundary: multipartBoundary
         )
+        requestBodyData.appendMultipartFileField(
+            named: "file",
+            filename: "voice-input.wav",
+            mimeType: "audio/wav",
+            fileData: wavAudioData,
+            usingBoundary: multipartBoundary
+        )
+        requestBodyData.appendString("--\(multipartBoundary)--\r\n")
         request.httpBody = requestBodyData
 
         let (responseData, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw OpenAIAudioTranscriptionProviderError(
-                message: "OpenAI transcription returned an invalid response."
+            throw VoxtralTranscriptionProviderError(
+                message: "The worker /transcribe returned an invalid response."
             )
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
             let responseText = String(data: responseData, encoding: .utf8) ?? "Unknown error"
-            throw OpenAIAudioTranscriptionProviderError(
-                message: "OpenAI transcription failed: \(responseText)"
+            throw VoxtralTranscriptionProviderError(
+                message: "Worker /transcribe failed (\(httpResponse.statusCode)): \(responseText)"
             )
         }
 
@@ -209,70 +216,9 @@ private final class OpenAIAudioTranscriptionSession: BuddyStreamingTranscription
             return transcriptionResponse.text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        let responseText = String(data: responseData, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        if !responseText.isEmpty {
-            return responseText
-        }
-
-        throw OpenAIAudioTranscriptionProviderError(
-            message: "OpenAI transcription returned an empty transcript."
+        throw VoxtralTranscriptionProviderError(
+            message: "Worker /transcribe returned no transcript text."
         )
-    }
-
-    private func makeMultipartRequestBody(
-        boundary: String,
-        wavAudioData: Data
-    ) -> Data {
-        var requestBodyData = Data()
-
-        requestBodyData.appendMultipartFormField(
-            named: "model",
-            value: modelName,
-            usingBoundary: boundary
-        )
-        requestBodyData.appendMultipartFormField(
-            named: "language",
-            value: "en",
-            usingBoundary: boundary
-        )
-        requestBodyData.appendMultipartFormField(
-            named: "response_format",
-            value: "json",
-            usingBoundary: boundary
-        )
-
-        if let contextualPrompt = transcriptionPromptText() {
-            requestBodyData.appendMultipartFormField(
-                named: "prompt",
-                value: contextualPrompt,
-                usingBoundary: boundary
-            )
-        }
-
-        requestBodyData.appendMultipartFileField(
-            named: "file",
-            filename: "voice-input.wav",
-            mimeType: "audio/wav",
-            fileData: wavAudioData,
-            usingBoundary: boundary
-        )
-        requestBodyData.appendString("--\(boundary)--\r\n")
-
-        return requestBodyData
-    }
-
-    private func transcriptionPromptText() -> String? {
-        let normalizedKeyterms = keyterms
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        guard !normalizedKeyterms.isEmpty else { return nil }
-
-        return """
-        This is a short push-to-talk transcript for a coding and product app. Expect product names, technical terms, and app-specific vocabulary such as: \(normalizedKeyterms.joined(separator: ", ")).
-        """
     }
 
     private func deliverFinalTranscript(_ transcriptText: String) {
