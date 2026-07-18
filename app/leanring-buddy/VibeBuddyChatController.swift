@@ -45,6 +45,7 @@ final class VibeBuddyChatController: ObservableObject {
                 let project = URL(fileURLWithPath: directory).lastPathComponent
                 confirmation = "🚀 Vibe Code agent launched on \(project): “\(vibeTask)”. Watch it work in VIBE CODE SESSIONS below — cost updates live."
             } else {
+                BuddySoundEffects.playHiss()
                 confirmation = "I couldn't find the Vibe Code CLI on this Mac — install it with `curl -LsSf https://mistral.ai/vibe/install.sh | bash` and try again."
             }
             messages.append(ChatMessage(id: UUID(), role: .assistant, text: confirmation))
@@ -109,6 +110,7 @@ final class VibeBuddyChatController: ObservableObject {
                 lastReplyWasReplayed = result.isReplayed
             } catch {
                 appendToAssistantMessage(actuationParser.flush())
+                BuddySoundEffects.playHiss()
                 let explanation = "I couldn't reach the worker (\(error.localizedDescription)). Check that wrangler dev is running on 127.0.0.1:8787, or set chat mode to replay."
                 messages.append(ChatMessage(id: UUID(), role: .assistant, text: explanation))
             }

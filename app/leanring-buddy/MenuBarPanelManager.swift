@@ -78,12 +78,13 @@ final class MenuBarPanelManager: NSObject {
 
         guard let button = statusItem?.button else { return }
 
-        // The Mistral mark, in color — the whole point is an M in the menu
-        // bar next to the other assistants' icons.
+        // The Mistral M as a template image (white-on-transparent source):
+        // macOS renders it black or white to match the menu bar, exactly
+        // like the other assistants' icons.
         if let logoURL = Bundle.main.url(forResource: "menubar-mistral", withExtension: "png"),
            let logo = NSImage(contentsOf: logoURL) {
             logo.size = NSSize(width: 18, height: 18)
-            logo.isTemplate = false
+            logo.isTemplate = true
             button.image = logo
         } else {
             button.image = NSImage(systemSymbolName: "message.badge.waveform", accessibilityDescription: "Vibe Buddy")
