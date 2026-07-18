@@ -151,17 +151,48 @@ final class MenuBarPanelManager: NSObject {
         if panel == nil {
             createPanel()
         }
+        guard let panel else { return }
 
-        positionPanelBelowStatusItem()
+        let finalFrame = sidePanelFrame()
 
-        panel?.makeKeyAndOrderFront(nil)
-        panel?.orderFrontRegardless()
+        if panel.isVisible {
+            panel.setFrame(finalFrame, display: true)
+            panel.makeKeyAndOrderFront(nil)
+        } else {
+            // Slide in from the right edge: start fully offscreen, ease out
+            // into the docked position.
+            var startFrame = finalFrame
+            startFrame.origin.x = (NSScreen.main?.frame.maxX ?? finalFrame.maxX) + 8
+            panel.setFrame(startFrame, display: false)
+            panel.alphaValue = 0.7
+            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().setFrame(finalFrame, display: true)
+                panel.animator().alphaValue = 1
+            }
+        }
         installClickOutsideMonitor()
     }
 
     private func hidePanel() {
-        panel?.orderOut(nil)
         removeClickOutsideMonitor()
+        guard let panel, panel.isVisible else { return }
+
+        // Slide back out to the right, then order out and reset for reuse.
+        var offscreenFrame = panel.frame
+        offscreenFrame.origin.x = (NSScreen.main?.frame.maxX ?? panel.frame.maxX) + 8
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().setFrame(offscreenFrame, display: true)
+            panel.animator().alphaValue = 0.7
+        }, completionHandler: {
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+        })
     }
 
     private func createPanel() {
@@ -202,19 +233,19 @@ final class MenuBarPanelManager: NSObject {
         panel = menuBarPanel
     }
 
-    private func positionPanelBelowStatusItem() {
-        guard let panel, let screen = NSScreen.main else { return }
+    /// The docked side-panel frame: pinned to the right edge of the main
+    /// screen at full visible height.
+    private func sidePanelFrame() -> NSRect {
+        guard let screen = NSScreen.main else {
+            return NSRect(x: 0, y: 0, width: panelWidth, height: 560)
+        }
         let visible = screen.visibleFrame
-
-        // Side panel: pinned to the right edge, full visible height — it
-        // sits beside the user's work instead of on top of it.
-        let frame = NSRect(
+        return NSRect(
             x: visible.maxX - panelWidth - panelEdgeMargin,
             y: visible.minY + panelEdgeMargin,
             width: panelWidth,
             height: panelHeight
         )
-        panel.setFrame(frame, display: true)
     }
 
     // MARK: - Click Outside Dismissal
